@@ -1,0 +1,35 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./node_modules/@prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// モデル定義
+model SiteConfig {
+  id          Int                @id @default(autoincrement())
+  name        String
+  description String?
+  created_at  DateTime           @default(now())
+  updated_at  DateTime           @updatedAt
+  details     SiteConfigDetail[]
+}
+
+model SiteConfigDetail {
+  id              Int      @id @default(autoincrement())
+  site_config_id  Int
+  item            String
+  word_style_name String
+  html_tag        String
+  html_class      String
+  html_style      String
+  prefix_text     String
+  suffix_text     String
+
+  siteConfig SiteConfig @relation(fields: [site_config_id], references: [id], onDelete: Cascade)
+}
