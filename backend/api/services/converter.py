@@ -3,6 +3,7 @@ import re
 import uuid
 import tempfile
 import zipfile
+import shutil
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from lxml import etree
@@ -37,6 +38,8 @@ class DocumentParser:
         with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_file:
             for chunk in doc_file.chunks():
                 tmp_file.write(chunk)
+        
+        xml_files = self.extract_and_save_xml(tmp_file.name, doc_file.name)
                 
         try:
             doc = Document(tmp_file.name)
@@ -45,7 +48,8 @@ class DocumentParser:
                 "paragraphs": [],
                 "tables": [],
                 "images": [],
-                "file_path": tmp_file.name  # 画像抽出用
+                "file_path": tmp_file.name,  # 画像抽出用
+                "xml_files": xml_files,  # 抽出されたXMLファイルのパス情報
             }
             
             # 段落の処理
@@ -72,6 +76,80 @@ class DocumentParser:
             # 一時ファイルを削除
             if os.path.exists(tmp_file.name):
                 os.unlink(tmp_file.name)
+    
+    def extract_and_save_xml(self, docx_path, original_filename) -> Dict[str, str]:
+        """
+        Wordファイル(docx)からXMLファイルを抽出して保存する
+        
+        Args:
+            docx_path: docxファイルのパス
+            original_filename: 元のファイル名
+            
+        Returns:
+            Dict: 保存されたXMLファイルの情報
+        """
+        # 保存先ディレクトリの設定
+        xml_dir_base = os.path.join(settings.BASE_DIR, 'xml_data')
+        if not os.path.exists(xml_dir_base):
+            os.makedirs(xml_dir_base)
+        
+        # 一意のディレクトリ名を生成（オリジナルファイル名を含む）
+        safe_filename = re.sub(r'[^\w\-\.]', '_', os.path.splitext(original_filename)[0])
+        xml_dir = os.path.join(xml_dir_base, f"{safe_filename}_{uuid.uuid4().hex[:8]}")
+        os.makedirs(xml_dir)
+        
+        saved_files = {}
+        
+        # docxファイルをZIPとして解凍
+        with zipfile.ZipFile(docx_path, 'r') as zip_ref:
+            # 必要なXMLファイルを抽出
+            for file_info in zip_ref.infolist():
+                if file_info.filename.endswith('.xml'):
+                    # XMLファイルの取得
+                    xml_content = zip_ref.read(file_info.filename)
+                    
+                    # ファイル名の生成
+                    filename = os.path.basename(file_info.filename)
+                    save_path = os.path.join(xml_dir, filename)
+                    
+                    # XMLファイルを保存
+                    with open(save_path, 'wb') as f:
+                        f.write(xml_content)
+                    
+                    # パスをマップに追加
+                    saved_files[filename] = save_path
+                    
+                    # document.xmlとstyles.xmlの場合は整形して保存
+                    if filename in ['document.xml', 'styles.xml']:
+                        try:
+                            # XMLを整形
+                            parser = etree.XMLParser(remove_blank_text=True)
+                            tree = etree.fromstring(xml_content, parser)
+                            pretty_xml = etree.tostring(tree, pretty_print=True, encoding='UTF-8').decode('utf-8')
+                            
+                            # 整形されたXMLを保存
+                            pretty_path = os.path.join(xml_dir, f"pretty_{filename}")
+                            with open(pretty_path, 'w', encoding='utf-8') as f:
+                                f.write(pretty_xml)
+                            
+                            saved_files[f"pretty_{filename}"] = pretty_path
+                        except Exception as e:
+                            print(f"XMLの整形中にエラーが発生しました: {str(e)}")
+        
+        # docxの構造をわかりやすくするためのディレクトリ構造も保存
+        structure_path = os.path.join(xml_dir, 'docx_structure.txt')
+        with zipfile.ZipFile(docx_path, 'r') as zip_ref:
+            with open(structure_path, 'w', encoding='utf-8') as f:
+                f.write("# Docxファイル内の構造\n\n")
+                for file_info in sorted(zip_ref.infolist(), key=lambda x: x.filename):
+                    f.write(f"{file_info.filename} - {file_info.file_size} bytes\n")
+        
+        saved_files['structure'] = structure_path
+        
+        return {
+            'directory': xml_dir,
+            'files': saved_files
+        }
     
     def _parse_paragraph(self, paragraph) -> Optional[Dict[str, Any]]:
         """段落をパースする"""
@@ -238,6 +316,7 @@ class HTMLGenerator:
             conversion_setting: 変換設定
         """
         self.setting = conversion_setting
+        # css_class_prefixは残しておくが使用しない
         self.css_class_prefix = self.setting.css_class_prefix or ""
     
     def generate_html(self, parsed_data: Dict[str, Any], saved_images: List[Dict[str, Any]] = None) -> str:
@@ -253,8 +332,8 @@ class HTMLGenerator:
         """
         html_parts = []
         
-        # HTMLのルート要素
-        html_root = f'<div class="{self.css_class_prefix}document">'
+        # HTMLのルート要素 - 接頭辞を使用しない
+        html_root = '<div class="document">'
         html_parts.append(html_root)
         
         # 段落の処理
@@ -285,8 +364,8 @@ class HTMLGenerator:
         else:
             tag = "p"
         
-        # CSSクラスを設定
-        css_class = f"{self.css_class_prefix}paragraph {self.css_class_prefix}{style_name}"
+        # CSSクラスを設定 - 接頭辞を使用しない
+        css_class = f"paragraph {style_name}"
         
         # テキストのスタイル処理
         runs = paragraph.get("runs", [])
@@ -321,16 +400,16 @@ class HTMLGenerator:
     
     def _convert_table(self, table: Dict[str, Any]) -> str:
         """テーブルをHTMLに変換"""
-        html_parts = [f'<table class="{self.css_class_prefix}table">']
+        html_parts = ['<table class="table">']
         html_parts.append('<tbody>')
         
         for row in table.get("rows", []):
-            html_parts.append(f'<tr class="{self.css_class_prefix}row">')
+            html_parts.append('<tr class="row">')
             for cell in row.get("cells", []):
                 cell_content = []
                 for paragraph in cell.get("content", []):
                     cell_content.append(self._convert_paragraph(paragraph))
-                html_parts.append(f'<td class="{self.css_class_prefix}cell">{"".join(cell_content)}</td>')
+                html_parts.append(f'<td class="cell">{"".join(cell_content)}</td>')
             html_parts.append('</tr>')
         
         html_parts.append('</tbody>')
@@ -340,7 +419,7 @@ class HTMLGenerator:
     
     def _insert_image(self, image: Dict[str, Any]) -> str:
         """画像をHTMLに挿入"""
-        return f'<p><img class="{self.css_class_prefix}image" src="{image["url"]}" alt="" /></p>'
+        return f'<p><img class="image" src="{image["url"]}" alt="" /></p>'
 
 
 class RuleApplier:
@@ -463,6 +542,7 @@ class WordToHtmlConverter:
         self.image_handler = ImageHandler(conversion_setting)
         self.html_generator = HTMLGenerator(conversion_setting)
         self.rule_applier = RuleApplier(conversion_setting)
+        self.parsed_data = None  # パース結果を保持するフィールドを追加
     
     def convert(self, word_file) -> Tuple[str, List[Dict[str, Any]]]:
         """
@@ -476,22 +556,22 @@ class WordToHtmlConverter:
         """
         try:
             # ドキュメントのパース
-            parsed_data = self.document_parser.parse_document(word_file)
+            self.parsed_data = self.document_parser.parse_document(word_file)
             
             # 画像の抽出と保存
             saved_images = []
-            if self.setting.preserve_images and parsed_data.get("images"):
-                saved_images = self.image_handler.extract_and_save_images(parsed_data["images"])
+            if self.setting.preserve_images and self.parsed_data.get("images"):
+                saved_images = self.image_handler.extract_and_save_images(self.parsed_data["images"])
             
             # HTMLの生成
-            html_content = self.html_generator.generate_html(parsed_data, saved_images)
+            html_content = self.html_generator.generate_html(self.parsed_data, saved_images)
             
             # 変換ルールの適用
             if self.setting.rules.filter(active=True).exists():
                 html_content = self.rule_applier.apply_rules(html_content)
             
             return html_content, self.image_handler.images
-        
+            
         except Exception as e:
             import traceback
             print(f"変換中にエラーが発生しました: {traceback.format_exc()}")
