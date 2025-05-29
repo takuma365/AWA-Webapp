@@ -23,7 +23,7 @@ const StartScreen = () => {
 
   const handleSettingsClick = () => {
     if (validateSelection()) {
-      navigate('/settings');
+      navigate(`/settings/${selectedSite}`);
     }
   };
 
@@ -39,9 +39,11 @@ const StartScreen = () => {
             }}
             className="w-full p-2 text-base border border-gray-300 rounded"
           >
-            <option>サイトを選択する</option>
-            <option>サイトA</option>
-            <option>サイトB</option>
+          <option value="">サイトを選択する</option>
+          <option value="cheerjob">チアジョブ</option>
+          <option value="nursestep">ナースステップ</option>
+          <option value="sony">ソニー</option>
+          <option value="zoff">zoff</option>
           </select>
           {error && (
             <p className="mt-2 text-sm text-red-600">{error}</p>
