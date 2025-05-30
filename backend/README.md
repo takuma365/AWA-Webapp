@@ -38,7 +38,7 @@ docker-compose exec backend bash -c "cd /app/app && python manage.py runserver 0
 curl -X POST http://localhost:8001/api/convert/ \
   -H "Content-Type: multipart/form-data" \
   -F "file=@/app/test_data/test.docx" \
-  -F "setting_id=2"
+  -F "site_url=cheerjob"
 
 # 2. レスポンスから変換IDを確認し、HTMLをダウンロード（IDは上記レスポンスの"id"フィールドの値に置き換えてください）
 curl -X GET "http://localhost:8001/api/download/?id=5" -o output.html
@@ -49,12 +49,12 @@ curl -X GET "http://localhost:8001/api/download/?id=5" -o output.html
 - 1つ目のコマンドのレスポンスに含まれる`id`フィールドの値を使用して、2つ目のコマンドを実行してください。
 - 例：レスポンスの`id`が5の場合は`curl -X GET "http://localhost:8001/api/download/?id=5" -o output.html`
 - 変換結果のHTMLは`output.html`として保存されます。ファイル名は任意に変更可能です。
-- `setting_id`は、データベースに登録されている変換設定のIDを指定してください。
+- `site_url`は、データベースに登録されている変換設定のURLを指定してください。
 
 ## トラブルシューティング
 
 - サーバーが起動しない場合は、Dockerコンテナが正常に起動しているか確認してください。
-- ファイル変換に失敗する場合は、指定したファイルパスが正しいか、また`setting_id`が存在するか確認してください。
+- ファイル変換に失敗する場合は、指定したファイルパスが正しいか、また`site_url`が存在するか確認してください。
 
 ## 開発環境の停止
 
