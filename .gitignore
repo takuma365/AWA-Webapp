@@ -3,3 +3,6 @@
 /python_check/
 result.json
 downloaded.html
+
+# 一時的なXMLデータディレクトリを無視
+backend/xml_data/test_*
