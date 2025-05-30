@@ -135,6 +135,14 @@ class WordConversionView(APIView):
                 "images": images
             }
             
+            # XMLファイルの情報が利用可能であればレスポンスに追加
+            if hasattr(converter, 'parsed_data') and 'xml_files' in converter.parsed_data:
+                xml_info = converter.parsed_data['xml_files']
+                # 相対パスに変換する
+                if 'directory' in xml_info:
+                    xml_info['relative_directory'] = os.path.relpath(xml_info['directory'], settings.BASE_DIR)
+                response_data['xml_files'] = xml_info
+            
             return Response(response_data, status=status.HTTP_200_OK)
             
         except Exception as e:
