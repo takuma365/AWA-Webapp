@@ -34,13 +34,22 @@ class SiteViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """新しいサイト作成時にデフォルトの変換設定も自動生成"""
+        name = request.data.get('name')
+
+        # サイト名で既存レコードを検索
+        site = Site.objects.filter(name=name).first()
+        if site:
+            # 既存サイトの有効フラグをON
+            if not site.active:
+                site.active = True
+                site.save()
+            serializer = self.get_serializer(site)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # 既存の記述スタイルを維持して新規作成
         response = super().create(request, *args, **kwargs)
-        
         if response.status_code == 201:
-            # 作成されたサイトを取得
             site = Site.objects.get(pk=response.data['id'])
-            
-            # デフォルト変換設定を作成
             ConversionSetting.objects.create(
                 site=site,
                 name='デフォルト設定',
@@ -50,7 +59,6 @@ class SiteViewSet(viewsets.ModelViewSet):
                 image_dir='images',
                 active=True
             )
-        
         return response
 
 
