@@ -27,10 +27,6 @@ services:
       - ./backend/media:/app/media
       - ./backend/test_data:/app/test_data
     working_dir: /app
-    command: >
-      bash -c "python app/manage.py makemigrations &&
-               python app/manage.py migrate &&
-               python app/manage.py runserver 0.0.0.0:8000"
     environment:
       - DEBUG=True
       - SECRET_KEY=dev-secret-key-change-in-production
