@@ -5,7 +5,7 @@ from django.utils.translation import gettext_lazy as _
 class Site(models.Model):
     """サイト設定モデル"""
     name = models.CharField(_('サイト名'), max_length=255)
-    code = models.CharField(_('サイトコード'), max_length=50, unique=True)
+    url = models.CharField(_('URL'), max_length=100, unique=True, help_text=_('サイトのURL（英小文字）'), null=True, blank=True)
     active = models.BooleanField(_('有効'), default=True)
     created_at = models.DateTimeField(_('作成日時'), auto_now_add=True)
     updated_at = models.DateTimeField(_('更新日時'), auto_now=True)
@@ -47,11 +47,36 @@ class ConversionSetting(models.Model):
 
 class ConversionRule(models.Model):
     """変換ルールモデル"""
-    RULE_TYPE_CHOICES = [
-        ('tag_replace', _('タグ置換')),
-        ('class_add', _('クラス追加')),
-        ('attribute_add', _('属性追加')),
-        ('custom', _('カスタム処理')),
+    
+    SECTION_CHOICES = [
+        ('タイトル', _('タイトル')),
+        ('目次', _('目次')),
+        ('大見出し', _('大見出し')),
+        ('中見出し', _('中見出し')),
+        ('小見出し', _('小見出し')),
+        ('内部リンク', _('内部リンク')),
+        ('外部リンク', _('外部リンク')),
+        ('太字', _('太字')),
+        ('ハイライト', _('ハイライト')),
+        ('赤字', _('赤字')),
+        ('箱の枠', _('箱の枠')),
+        ('箱内テキスト（中点）', _('箱内テキスト（中点）')),
+        ('箱内リンクテキスト（中点）', _('箱内リンクテキスト（中点）')),
+        ('箱内テキスト（番号）', _('箱内テキスト（番号）')),
+        ('表', _('表')),
+        ('テキスト', _('テキスト')),
+        ('ショートコード', _('ショートコード')),
+        ('文頭', _('文頭')),
+        ('文末', _('文末')),
+    ]
+    
+    WORD_STYLE_CHOICES = [
+        ('見出し１', _('見出し１')),
+        ('見出し２', _('見出し２')),
+        ('見出し３', _('見出し３')),
+        ('見出し４', _('見出し４')),
+        ('標準', _('標準')),
+        ('Wordに記載なし', _('Wordに記載なし')),
     ]
     
     setting = models.ForeignKey(
@@ -60,20 +85,52 @@ class ConversionRule(models.Model):
         related_name='rules',
         verbose_name=_('変換設定')
     )
-    name = models.CharField(_('ルール名'), max_length=255)
-    rule_type = models.CharField(_('ルールタイプ'), max_length=20, choices=RULE_TYPE_CHOICES)
-    source_selector = models.CharField(_('対象セレクタ'), max_length=255)
-    target_value = models.CharField(_('変換値'), max_length=255, blank=True)
-    priority = models.IntegerField(_('優先度'), default=0)
+    section = models.CharField(
+        _('セクション'), 
+        max_length=50, 
+        choices=SECTION_CHOICES,
+        default='大見出し'
+    )
+    tag = models.CharField(
+        _('タグ'), 
+        max_length=500, 
+        help_text=_('HTML形式で入力（例: <h1></h1>）'),
+        default='<p></p>'
+    )
+    word_style = models.CharField(
+        _('Wordにおけるスタイル'), 
+        max_length=50, 
+        choices=WORD_STYLE_CHOICES,
+        default='標準'
+    )
+    bold = models.BooleanField(_('太字'), default=False)
+    marker = models.BooleanField(_('マーカー'), default=False)
+    prefix_text = models.CharField(
+        _('前にある文字列'),
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text=_('改行は￥nで入力')
+    )
+    suffix_text = models.CharField(
+        _('後ろにある文字列'),
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text=_('改行は￥nで入力')
+    )
     active = models.BooleanField(_('有効'), default=True)
+    created_at = models.DateTimeField(_('作成日時'), auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(_('更新日時'), auto_now=True, null=True, blank=True)
     
     class Meta:
         verbose_name = _('変換ルール')
         verbose_name_plural = _('変換ルール')
-        ordering = ['setting', 'priority']
+        ordering = ['setting', 'section']
+        unique_together = [['setting', 'section']]  # 同じ設定内で同じセクションは1つまで
     
     def __str__(self):
-        return f"{self.setting} - {self.name}"
+        return f"{self.setting} - {self.section}"
 
 
 class ConversionOutput(models.Model):

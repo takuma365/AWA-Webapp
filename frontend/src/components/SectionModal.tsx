@@ -39,12 +39,15 @@ const SectionModal: React.FC<SectionModalProps> = ({
   ];
 
   const handleSubmit = () => {
+    console.log('[DEBUG] SectionModal handleSubmit called with:', { selectedSection, actionType });
+    
     if (actionType === 'remove') {
       const confirmDelete = window.confirm(`本当に「${selectedSection}」セクションを削除しますか？`);
       if (!confirmDelete) return; // ユーザーがキャンセルした場合、処理を終了
     }
 
     if (selectedSection) {
+      console.log('[DEBUG] SectionModal calling onSubmit with:', { selectedSection, actionType });
       onSubmit(selectedSection, actionType);
       setSelectedSection('');
       onClose();

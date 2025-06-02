@@ -24,6 +24,43 @@ class SiteViewSet(viewsets.ModelViewSet):
     queryset = Site.objects.filter(active=True)
     serializer_class = SiteSerializer
 
+    def get_queryset(self):
+        """URLパラメータによるフィルタリングを行う"""
+        queryset = super().get_queryset()
+        url = self.request.query_params.get('url')
+        if url:
+            queryset = queryset.filter(url=url)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        """新しいサイト作成時にデフォルトの変換設定も自動生成"""
+        name = request.data.get('name')
+
+        # サイト名で既存レコードを検索
+        site = Site.objects.filter(name=name).first()
+        if site:
+            # 既存サイトの有効フラグをON
+            if not site.active:
+                site.active = True
+                site.save()
+            serializer = self.get_serializer(site)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # 既存の記述スタイルを維持して新規作成
+        response = super().create(request, *args, **kwargs)
+        if response.status_code == 201:
+            site = Site.objects.get(pk=response.data['id'])
+            ConversionSetting.objects.create(
+                site=site,
+                name='デフォルト設定',
+                css_class_prefix=f'{site.url}-',
+                remove_empty_paragraphs=True,
+                preserve_images=True,
+                image_dir='images',
+                active=True
+            )
+        return response
+
 
 class ConversionSettingViewSet(viewsets.ModelViewSet):
     """変換設定のCRUD操作用ViewSet"""
@@ -82,7 +119,6 @@ class WordConversionView(APIView):
         
         # バリデーション済みデータを取得
         word_file = serializer.validated_data['file']
-        setting_id = serializer.validated_data['setting_id']
         
         # ファイル拡張子の確認
         name, ext = os.path.splitext(word_file.name)
@@ -99,7 +135,7 @@ class WordConversionView(APIView):
                 temp_dir.mkdir(parents=True, exist_ok=True)
                 
             # 変換設定の取得
-            setting = get_object_or_404(ConversionSetting, pk=setting_id, active=True)
+            setting = serializer.get_conversion_setting()
             
             # 変換処理の実行
             converter = WordToHtmlConverter(setting)

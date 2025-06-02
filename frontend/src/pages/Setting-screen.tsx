@@ -54,16 +54,41 @@ function validateTagStructure(input: string): string {
   return '';
 }
 
+// サイトデータの型定義を修正
+interface Site {
+  id: number;
+  name: string;
+  url: string; // 修正: code → url
+  active: boolean;
+  conversion_settings: {
+    id: number;
+    name: string;
+    css_class_prefix: string;
+    remove_empty_paragraphs: boolean;
+    preserve_images: boolean;
+    image_dir: string;
+    active: boolean;
+    rules: any[];
+  }[];
+}
+
+// タブの型定義を更新
+interface Tab {
+  name: string;
+  id: string;
+}
+
 const SettingsScreen = () => {
   const { tabId } = useParams();
   const navigate = useNavigate();
 
-  const [tabs, setTabs] = useState<{ name: string; id: string }[]>([]);
+  const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('');
   const [sectionMap, setSectionMap] = useState<Record<string, string[]>>({});
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, Record<string, FieldErrors>>>({});
-  const [formData, setFormData] = useState<Record<string, Record<string, SectionFields>>>({});  const [isTabModalOpen, setIsTabModalOpen] = useState(false);
+  const [formData, setFormData] = useState<Record<string, Record<string, SectionFields>>>({});
+  const [isTabModalOpen, setIsTabModalOpen] = useState(false);
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'save' | 'delete-tab' | 'delete-tab-data'>();
@@ -72,16 +97,45 @@ const SettingsScreen = () => {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   
-  useEffect(() => {
-    if (tabs.length === 0) {
-      const initialTabs = [
+  // サイトデータを取得する関数
+  const fetchSites = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/sites/');
+      if (!response.ok) {
+        throw new Error('サイトデータの取得に失敗しました');
+      }
+      const sites: Site[] = await response.json();
+      
+      // アクティブなサイトのみをタブとして設定
+      const activeSites = sites
+        .filter(site => site.active)
+        .map(site => ({
+          name: site.name,
+          id: site.url || site.name.toLowerCase() // 修正: code → url
+        }))
+        .filter(site => site.id); // id が存在するもののみ
+      
+      setTabs(activeSites);
+    } catch (error) {
+      console.error('Error fetching sites:', error);
+      // エラー時のフォールバック
+      setTabs([
         { name: 'チアジョブ', id: 'cheerjob' },
         { name: 'ナースステップ', id: 'nursestep' },
         { name: 'ソニー', id: 'sony' },
         { name: 'zoff', id: 'zoff' },
-      ];
-      setTabs(initialTabs);
-      const initialSections = Object.fromEntries(initialTabs.map((tab) => [tab.id, DEFAULT_SECTIONS]));
+      ]);
+    }
+  };
+
+  // コンポーネントマウント時にサイトデータを取得
+  useEffect(() => {
+    fetchSites();
+  }, []);
+
+  useEffect(() => {
+    if (tabs.length > 0) {
+      const initialSections = Object.fromEntries(tabs.map((tab) => [tab.id, DEFAULT_SECTIONS]));
       setSectionMap(initialSections);
       const openState: Record<string, boolean> = {};
       DEFAULT_SECTIONS.forEach((section, i) => {
@@ -90,7 +144,7 @@ const SettingsScreen = () => {
       setOpenSections(openState);
 
       const initialForm: Record<string, Record<string, SectionFields>> = {};
-      for (const tab of initialTabs) {
+      for (const tab of tabs) {
         initialForm[tab.id] = {};
         for (const section of DEFAULT_SECTIONS) {
           initialForm[tab.id][section] = {
@@ -104,78 +158,208 @@ const SettingsScreen = () => {
         }
       }
       setFormData(initialForm);
-      const initialId = tabId && initialTabs.some(t => t.id === tabId)
+      
+      const initialId = tabId && tabs.some(t => t.id === tabId)
         ? tabId
-        : initialTabs[0].id;
-      setActiveTabId(initialId);
-      // URL と同期（param がない場合だけリダイレクト）
-      if (!tabId || !initialTabs.some(t => t.id === tabId)) {
-        navigate(`/settings/${initialId}`, { replace: true });
+        : tabs.length > 0 ? tabs[0].id : '';
+      
+      if (initialId) {
+        setActiveTabId(initialId);
+        
+        // URL と同期（param がない場合だけリダイレクト）
+        if (!tabId || !tabs.some(t => t.id === tabId)) {
+          navigate(`/settings/${initialId}`, { replace: true });
+        }
       }
-    } else {
-      const matched = tabs.find((tab) => tab.id === tabId);
-      if (matched) setActiveTabId(matched.id);
     }
   }, [tabId, tabs, navigate]);
+
+  useEffect(() => {
+    const fetchAndSetRules = async () => {
+      if (!activeTabId) return;
+
+      // サイト情報から変換設定IDを取得
+      const siteRes = await fetch(`http://localhost:8000/api/sites/?url=${activeTabId}`);
+      const sites = await siteRes.json();
+      if (!sites.length) return;
+      const site = sites[0];
+      const settingId = site.conversion_settings[0]?.id;
+      console.log('settingId:', settingId, 'site:', site.name);
+      if (!settingId) return;
+
+      // ルール一覧を取得
+      const rulesRes = await fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`);
+      const rules = await rulesRes.json();
+
+      // sectionMapとformDataを初期化
+      const sectionList = rules.map((rule: any) => rule.section);
+      setSectionMap((prev) => ({ ...prev, [activeTabId]: sectionList }));
+
+      const newFormData: Record<string, SectionFields> = {};
+      rules.forEach((rule: any) => {
+        newFormData[rule.section] = {
+          tag: rule.tag,
+          wordStyle: rule.word_style,
+          bold: rule.bold ? 'true' : '',
+          extraStyle: rule.marker ? 'marker' : '',
+          prefix: rule.prefix_text || '',
+          suffix: rule.suffix_text || '',
+        };
+      });
+      setFormData((prev) => ({ ...prev, [activeTabId]: newFormData }));
+    };
+
+    fetchAndSetRules();
+  }, [activeTabId]);
+
   useEffect(() => {
     setErrors(prev => ({
       ...prev,
       [activeTabId]: {}
     }));
   }, [activeTabId]);
-  const handleTabSubmit = (name: string, id: string) => {
-    if (tabs.some((tab) => tab.id === id)) return;
-    const newTab = { name, id };
-    setTabs((prev) => [...prev, newTab]);
-    setSectionMap((prev) => ({ ...prev, [id]: DEFAULT_SECTIONS }));
-
-    const newFormData: Record<string, SectionFields> = {};
-    for (const section of DEFAULT_SECTIONS) {
-      newFormData[section] = {
-        tag: '',
-        wordStyle: '',
-        bold: '',
-        extraStyle: '',
-        prefix: '',
-        suffix: '',
-      };
+  const handleTabSubmit = async (name: string, id: string) => {
+    console.log('[DEBUG] handleTabSubmit called with:', { name, id });
+    
+    // ローカルでの重複チェック
+    if (tabs.some((tab) => tab.id === id)) {
+      alert('同じURLのサイトが既に存在します。');
+      return;
     }
-    setFormData((prev) => ({ ...prev, [id]: newFormData }));
-    navigate(`/settings/${id}`);
+    
+    try {
+      // バックエンドでの重複チェック
+      const checkResponse = await fetch(`http://localhost:8000/api/sites/?url=${encodeURIComponent(id)}`);
+      if (checkResponse.ok) {
+        const existingSites = await checkResponse.json();
+        if (existingSites.length > 0) {
+          alert('同じURLのサイトが既にデータベースに存在します。');
+          return;
+        }
+      }
+
+      // バックエンドに新しいサイトを作成
+      const response = await fetch('http://localhost:8000/api/sites/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: name,
+          url: id,
+          active: true
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('サイト作成エラー:', errorData);
+        
+        // より詳細なエラーメッセージ
+        if (response.status === 400) {
+          alert('入力データが正しくありません。サイト名とURLを確認してください。');
+        } else {
+          alert('サイトの作成に失敗しました。');
+        }
+        return;
+      }
+
+      const newSite = await response.json();
+      
+      // 成功したらローカルステートを更新
+      const newTab = { name, id };
+      setTabs((prev) => [...prev, newTab]);
+      setSectionMap((prev) => ({ ...prev, [id]: DEFAULT_SECTIONS }));
+
+      const newFormData: Record<string, SectionFields> = {};
+      for (const section of DEFAULT_SECTIONS) {
+        newFormData[section] = {
+          tag: '',
+          wordStyle: '',
+          bold: '',
+          extraStyle: '',
+          prefix: '',
+          suffix: '',
+        };
+      }
+      setFormData((prev) => ({ ...prev, [id]: newFormData }));
+      navigate(`/settings/${id}`);
+      
+      alert(`サイト「${name}」を作成しました。`);
+      
+    } catch (error) {
+      console.error('サイト作成エラー:', error);
+      alert('サイトの作成中にエラーが発生しました。ネットワーク接続を確認してください。');
+    }
   };
 
-  const handleTabDelete = (id: string) => {
-    setTabs((prev) => prev.filter((tab) => tab.id !== id));
-    setSectionMap((prev) => {
-      const updated = { ...prev };
-      delete updated[id];
-      return updated;
-    });
-    setFormData((prev) => {
-      const updated = { ...prev };
-      delete updated[id];
-      return updated;
-    });
-    setErrors((prev) => {
-      const updated = { ...prev };
-      delete updated[id];
-      return updated;
-    });
-  
-    // 削除後の遷移先を決定（残っていれば最初のタブへ遷移）
-    const remaining = tabs.filter((tab) => tab.id !== id);
-    if (remaining.length > 0) {
-      const nextTab = remaining[0].id;
-      setActiveTabId(nextTab);
-      navigate(`/settings/${nextTab}`);
-    } else {
-      setActiveTabId('');
-      navigate(`/settings`);
+  const handleTabDelete = async (id: string) => {
+    try {
+      // まずバックエンドから削除対象のサイトを検索
+      const sitesResponse = await fetch('http://localhost:8000/api/sites/');
+      if (sitesResponse.ok) {
+        const sites = await sitesResponse.json();
+        const targetSite = sites.find((site: any) => site.url === id);
+        
+        if (targetSite) {
+          // バックエンドからサイトを削除（論理削除: active = false）
+          const deleteResponse = await fetch(`http://localhost:8000/api/sites/${targetSite.id}/`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              active: false
+            })
+          });
+
+          if (!deleteResponse.ok) {
+            console.error('サイト削除エラー');
+            alert('サイトの削除に失敗しました。');
+            return;
+          }
+        }
+      }
+
+      // バックエンド処理が成功したらローカルステートを更新
+      setTabs((prev) => prev.filter((tab) => tab.id !== id));
+      setSectionMap((prev) => {
+        const updated = { ...prev };
+        delete updated[id];
+        return updated;
+      });
+      setFormData((prev) => {
+        const updated = { ...prev };
+        delete updated[id];
+        return updated;
+      });
+      setErrors((prev) => {
+        const updated = { ...prev };
+        delete updated[id];
+        return updated;
+      });
+
+      // 削除後の遷移先を決定（残っていれば最初のタブへ遷移）
+      const remaining = tabs.filter((tab) => tab.id !== id);
+      if (remaining.length > 0) {
+        const nextTab = remaining[0].id;
+        setActiveTabId(nextTab);
+        navigate(`/settings/${nextTab}`);
+      } else {
+        setActiveTabId('');
+        navigate(`/settings`);
+      }
+      
+    } catch (error) {
+      console.error('サイト削除エラー:', error);
+      alert('サイトの削除中にエラーが発生しました。');
     }
   };
   
 
   const handleSectionSubmit = (name: string, action: string) => {
+    console.log('[DEBUG] handleSectionSubmit called with:', { name, action });
+    
     if (!name || !activeTabId) return;
     setSectionMap((prev) => {
       const current = prev[activeTabId] || [];
@@ -287,7 +471,7 @@ const SettingsScreen = () => {
     }));
   };
 
-  const handleSaveClick = () => {
+  const handleSaveClick = async () => {
     const newErrors: Record<string, FieldErrors> = {};
     (sectionMap[activeTabId] || []).forEach(section => {
       if (!formData[activeTabId][section].wordStyle) {
@@ -298,7 +482,6 @@ const SettingsScreen = () => {
       }
     });
   
-    // エラーがあれば state にセットして終了
     if (Object.keys(newErrors).length > 0) {
       setErrors(prev => ({
         ...prev,
@@ -309,9 +492,54 @@ const SettingsScreen = () => {
       }));
       return;
     }
-    // エラーなしなら確認モーダルを開く
-    setConfirmAction('save');
-    setIsConfirmModalOpen(true);
+
+    // サイト→変換設定ID取得
+    const siteRes = await fetch(`http://localhost:8000/api/sites/?url=${activeTabId}`);
+    const sites = await siteRes.json();
+    if (!sites.length) return;
+    const site = sites[0];
+    const settingId = site.conversion_settings[0]?.id;
+    console.log('settingId:', settingId, 'site:', site.name);
+    if (!settingId) return;
+
+    // 既存ルール一覧を取得
+    const rulesRes = await fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`);
+    const rules = await rulesRes.json();
+
+    // 各セクションごとにAPIリクエスト
+    for (const section of sectionMap[activeTabId] || []) {
+      const data = formData[activeTabId][section];
+      const existing = rules.find((r: any) => r.section === section);
+      const payload = {
+        setting: settingId,
+        section,
+        tag: data.tag,
+        word_style: data.wordStyle,
+        bold: data.bold === 'true',
+        marker: data.extraStyle === 'marker',
+        prefix_text: data.prefix,
+        suffix_text: data.suffix,
+        active: true,
+      };
+      if (existing) {
+        // 更新
+        await fetch(`http://localhost:8000/api/rules/${existing.id}/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // 新規作成
+        await fetch(`http://localhost:8000/api/rules/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+    }
+
+    alert('保存しました');
+    // 保存後に再取得して反映したい場合はfetchAndSetRules()を呼ぶ
   };
   useEffect(() => {
   }, [isConfirmModalOpen]);
@@ -345,7 +573,10 @@ const SettingsScreen = () => {
               {tab.name}
             </button>
           ))}
-          <button className="px-4 py-2 text-lg font-bold border-l border-black bg-white" onClick={() => setIsTabModalOpen(true)}>＋</button>
+          <button className="px-4 py-2 text-lg font-bold border-l border-black bg-white" onClick={() => {
+            console.log('[DEBUG] Tab add button clicked');
+            setIsTabModalOpen(true);
+          }}>＋</button>
         </div>
         <button onClick={scrollRight} className="px-2">▶</button>
       </div>
@@ -450,8 +681,16 @@ const SettingsScreen = () => {
       ))}
 
       <div className="mt-4 flex justify-between">
-        <button onClick={() => { setActionType('remove'); setIsSectionModalOpen(true); }} className="px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded">－ セクションを削除</button>
-        <button onClick={() => { setActionType('add'); setIsSectionModalOpen(true); }} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">＋ セクションを追加</button>
+        <button onClick={() => { 
+          console.log('[DEBUG] Section remove button clicked'); 
+          setActionType('remove'); 
+          setIsSectionModalOpen(true); 
+        }} className="px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded">－ セクションを削除</button>
+        <button onClick={() => { 
+          console.log('[DEBUG] Section add button clicked'); 
+          setActionType('add'); 
+          setIsSectionModalOpen(true); 
+        }} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">＋ セクションを追加</button>
       </div>
 
       <div className="flex justify-between mt-6">
