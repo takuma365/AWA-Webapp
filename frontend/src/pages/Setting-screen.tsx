@@ -100,7 +100,7 @@ const SettingsScreen = () => {
   // サイトデータを取得する関数
   const fetchSites = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/sites/');
+      const response = await fetch('http://localhost:8001/api/sites/');
       if (!response.ok) {
         throw new Error('サイトデータの取得に失敗しました');
       }
@@ -179,7 +179,7 @@ const SettingsScreen = () => {
       if (!activeTabId) return;
 
       // サイト情報から変換設定IDを取得
-      const siteRes = await fetch(`http://localhost:8000/api/sites/?url=${activeTabId}`);
+      const siteRes = await fetch(`http://localhost:8001/api/sites/?url=${activeTabId}`);
       const sites = await siteRes.json();
       if (!sites.length) return;
       const site = sites[0];
@@ -188,7 +188,7 @@ const SettingsScreen = () => {
       if (!settingId) return;
 
       // ルール一覧を取得
-      const rulesRes = await fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`);
+      const rulesRes = await fetch(`http://localhost:8001/api/rules/?setting_id=${settingId}`);
       const rules = await rulesRes.json();
 
       // sectionMapとformDataを初期化
@@ -229,7 +229,7 @@ const SettingsScreen = () => {
     
     try {
       // バックエンドでの重複チェック
-      const checkResponse = await fetch(`http://localhost:8000/api/sites/?url=${encodeURIComponent(id)}`);
+      const checkResponse = await fetch(`http://localhost:8001/api/sites/?url=${encodeURIComponent(id)}`);
       if (checkResponse.ok) {
         const existingSites = await checkResponse.json();
         if (existingSites.length > 0) {
@@ -239,7 +239,7 @@ const SettingsScreen = () => {
       }
 
       // バックエンドに新しいサイトを作成
-      const response = await fetch('http://localhost:8000/api/sites/', {
+      const response = await fetch('http://localhost:8001/api/sites/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -296,14 +296,14 @@ const SettingsScreen = () => {
   const handleTabDelete = async (id: string) => {
     try {
       // まずバックエンドから削除対象のサイトを検索
-      const sitesResponse = await fetch('http://localhost:8000/api/sites/');
+      const sitesResponse = await fetch('http://localhost:8001/api/sites/');
       if (sitesResponse.ok) {
         const sites = await sitesResponse.json();
         const targetSite = sites.find((site: any) => site.url === id);
         
         if (targetSite) {
           // バックエンドからサイトを削除（論理削除: active = false）
-          const deleteResponse = await fetch(`http://localhost:8000/api/sites/${targetSite.id}/`, {
+          const deleteResponse = await fetch(`http://localhost:8001/api/sites/${targetSite.id}/`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
@@ -494,7 +494,7 @@ const SettingsScreen = () => {
     }
 
     // サイト→変換設定ID取得
-    const siteRes = await fetch(`http://localhost:8000/api/sites/?url=${activeTabId}`);
+    const siteRes = await fetch(`http://localhost:8001/api/sites/?url=${activeTabId}`);
     const sites = await siteRes.json();
     if (!sites.length) return;
     const site = sites[0];
@@ -503,7 +503,7 @@ const SettingsScreen = () => {
     if (!settingId) return;
 
     // 既存ルール一覧を取得
-    const rulesRes = await fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`);
+    const rulesRes = await fetch(`http://localhost:8001/api/rules/?setting_id=${settingId}`);
     const rules = await rulesRes.json();
 
     // 各セクションごとにAPIリクエスト
@@ -523,14 +523,14 @@ const SettingsScreen = () => {
       };
       if (existing) {
         // 更新
-        await fetch(`http://localhost:8000/api/rules/${existing.id}/`, {
+        await fetch(`http://localhost:8001/api/rules/${existing.id}/`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
       } else {
         // 新規作成
-        await fetch(`http://localhost:8000/api/rules/`, {
+        await fetch(`http://localhost:8001/api/rules/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

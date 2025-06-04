@@ -18,6 +18,7 @@ const StartScreen = () => {
   // handleGenerateClic名前変える
   const handleGenerateClick = () => {
     if (validateSelection()) {
+      navigate(`/generation/${selectedSite}`);
     }
   };
 
