@@ -92,8 +92,7 @@ class ConversionRule(models.Model):
         default='大見出し'
     )
     tag = models.CharField(
-        _('タグ'), 
-        max_length=500, 
+        _('タグ'),  
         help_text=_('HTML形式で入力（例: <h1></h1>）'),
         default='<p></p>'
     )

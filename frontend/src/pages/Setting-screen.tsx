@@ -16,7 +16,6 @@ type SectionFields = {
   prefix: string;
   suffix: string;
 };
-const DEFAULT_SECTIONS = ['大見出し', '中見出し'];
 
 const selfClosingTags = new Set([
   'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
@@ -99,6 +98,7 @@ const SettingsScreen = () => {
   
   // サイトデータを取得する関数
   const fetchSites = async () => {
+    await new Promise(resolve => setTimeout(resolve, 3000)); 
     try {
       const response = await fetch('http://localhost:8000/api/sites/');
       if (!response.ok) {
@@ -135,27 +135,15 @@ const SettingsScreen = () => {
 
   useEffect(() => {
     if (tabs.length > 0) {
-      const initialSections = Object.fromEntries(tabs.map((tab) => [tab.id, DEFAULT_SECTIONS]));
+      // 初期化時は空の配列を設定
+      const initialSections = Object.fromEntries(tabs.map((tab) => [tab.id, []]));
       setSectionMap(initialSections);
       const openState: Record<string, boolean> = {};
-      DEFAULT_SECTIONS.forEach((section, i) => {
-        openState[section] = i === 0;
-      });
       setOpenSections(openState);
 
       const initialForm: Record<string, Record<string, SectionFields>> = {};
       for (const tab of tabs) {
         initialForm[tab.id] = {};
-        for (const section of DEFAULT_SECTIONS) {
-          initialForm[tab.id][section] = {
-            tag: '',
-            wordStyle: '',
-            bold: '',
-            extraStyle: '',
-            prefix: '',
-            suffix: '',
-          };
-        }
       }
       setFormData(initialForm);
       
@@ -269,19 +257,9 @@ const SettingsScreen = () => {
       // 成功したらローカルステートを更新
       const newTab = { name, id };
       setTabs((prev) => [...prev, newTab]);
-      setSectionMap((prev) => ({ ...prev, [id]: DEFAULT_SECTIONS }));
+      setSectionMap((prev) => ({ ...prev, [id]: [] }));
 
       const newFormData: Record<string, SectionFields> = {};
-      for (const section of DEFAULT_SECTIONS) {
-        newFormData[section] = {
-          tag: '',
-          wordStyle: '',
-          bold: '',
-          extraStyle: '',
-          prefix: '',
-          suffix: '',
-        };
-      }
       setFormData((prev) => ({ ...prev, [id]: newFormData }));
       navigate(`/settings/${id}`);
       
@@ -435,18 +413,20 @@ const SettingsScreen = () => {
       error = value ? '' : '未設定です';
     }
     if (key === 'tag') {
-      const hasId = value.includes('id="');
-      const idMatch = value.match(/id="([^"]*)"/);
-      // id属性はあるけど、値に「1」が含まれていない場合はエラー
-      const isInvalidId = hasId && (!idMatch || !idMatch[1].includes('1'));
-  
-      // タグのネスト構造チェック
-      const tagStructureError = validateTagStructure(value);
-  
-      // id属性エラーを優先
-      error = isInvalidId
-        ? 'id属性には1を含めてください。'
-        : tagStructureError;
+      if (section !== '文頭' && section !== '文末') {
+        const hasId = value.includes('id="');
+        const idMatch = value.match(/id="([^"]*)"/);
+        // id属性はあるけど、値に「1」が含まれていない場合はエラー
+        const isInvalidId = hasId && (!idMatch || !idMatch[1].includes('1'));
+    
+        // タグのネスト構造チェック
+        const tagStructureError = validateTagStructure(value);
+    
+        // id属性エラーを優先
+        error = isInvalidId
+          ? 'id属性には1を含めてください。'
+          : tagStructureError;
+      }
     }
 
     setFormData(prev => ({
@@ -472,16 +452,33 @@ const SettingsScreen = () => {
   };
 
   const handleSaveClick = async () => {
+    // バリデーションチェック（文頭・文末以外のセクション）
     const newErrors: Record<string, FieldErrors> = {};
     (sectionMap[activeTabId] || []).forEach(section => {
-      if (!formData[activeTabId][section].wordStyle) {
-        newErrors[section] = {
-          ...(errors[activeTabId]?.[section] || {}),
-          wordStyle: '未設定です',
-        };
+      if (section !== '文頭' && section !== '文末') {
+        const data = formData[activeTabId][section];
+        if (!data.wordStyle) {
+          newErrors[section] = {
+            ...(errors[activeTabId]?.[section] || {}),
+            wordStyle: '未設定です',
+          };
+        }
+        if (data.tag) {
+          const hasId = data.tag.includes('id="');
+          const idMatch = data.tag.match(/id="([^"]*)"/);
+          const isInvalidId = hasId && (!idMatch || !idMatch[1].includes('1'));
+          const tagStructureError = validateTagStructure(data.tag);
+          
+          if (isInvalidId || tagStructureError) {
+            newErrors[section] = {
+              ...(newErrors[section] || {}),
+              tag: isInvalidId ? 'id属性には1を含めてください。' : tagStructureError,
+            };
+          }
+        }
       }
     });
-  
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(prev => ({
         ...prev,
@@ -490,56 +487,150 @@ const SettingsScreen = () => {
           ...newErrors,
         },
       }));
+      alert('入力内容にエラーがあります。修正してください。');
       return;
     }
 
-    // サイト→変換設定ID取得
-    const siteRes = await fetch(`http://localhost:8000/api/sites/?url=${activeTabId}`);
-    const sites = await siteRes.json();
-    if (!sites.length) return;
-    const site = sites[0];
-    const settingId = site.conversion_settings[0]?.id;
-    console.log('settingId:', settingId, 'site:', site.name);
-    if (!settingId) return;
-
-    // 既存ルール一覧を取得
-    const rulesRes = await fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`);
-    const rules = await rulesRes.json();
-
-    // 各セクションごとにAPIリクエスト
-    for (const section of sectionMap[activeTabId] || []) {
-      const data = formData[activeTabId][section];
-      const existing = rules.find((r: any) => r.section === section);
-      const payload = {
-        setting: settingId,
-        section,
-        tag: data.tag,
-        word_style: data.wordStyle,
-        bold: data.bold === 'true',
-        marker: data.extraStyle === 'marker',
-        prefix_text: data.prefix,
-        suffix_text: data.suffix,
-        active: true,
-      };
-      if (existing) {
-        // 更新
-        await fetch(`http://localhost:8000/api/rules/${existing.id}/`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      } else {
-        // 新規作成
-        await fetch(`http://localhost:8000/api/rules/`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+    try {
+      console.log('保存開始:', activeTabId);
+      
+      // サイト→変換設定ID取得
+      const siteRes = await fetch(`http://localhost:8000/api/sites/?url=${activeTabId}`);
+      console.log('サイトAPIレスポンス:', { status: siteRes.status });
+      
+      const sites = await siteRes.json();
+      console.log('取得したサイト:', sites);
+      
+      if (!sites.length) {
+        console.error('サイトが見つかりません:', activeTabId);
+        throw new Error('サイトが見つかりません');
       }
-    }
+      
+      const site = sites[0];
+      const settingId = site.conversion_settings[0]?.id;
+      console.log('変換設定ID:', settingId);
+      
+      if (!settingId) {
+        console.error('変換設定が見つかりません:', site);
+        throw new Error('変換設定が見つかりません');
+      }
 
-    alert('保存しました');
-    // 保存後に再取得して反映したい場合はfetchAndSetRules()を呼ぶ
+      // 既存ルール一覧を取得
+      const rulesRes = await fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`);
+      const rules = await rulesRes.json();
+      console.log('既存ルール:', rules);
+
+      // 各セクションごとにAPIリクエスト
+      for (const section of sectionMap[activeTabId] || []) {
+        console.log(`セクション「${section}」の処理開始`);
+        
+        const data = formData[activeTabId][section];
+        const existing = rules.find((r: any) => r.section === section);
+        console.log('既存ルール:', existing);
+
+        // ペイロードの基本構造を作成
+        const basePayload = {
+          setting: settingId,
+          section,
+          tag: data.tag || existing?.tag || '',
+          word_style: data.wordStyle || existing?.word_style || '',
+          bold: data.bold === 'true',
+          marker: data.extraStyle === 'marker',
+          prefix_text: data.prefix || existing?.prefix_text || '',
+          suffix_text: data.suffix || existing?.suffix_text || '',
+          active: true,
+        };
+
+        let payload = { ...basePayload };
+
+        // 文頭・文末の場合のみ特別な処理を適用
+        if (section === '文頭' || section === '文末') {
+          try {
+            // タグの内容を処理（改行を保持）
+            let tagContent = payload.tag;
+            
+            // 文頭・文末の場合はHTMLエスケープ処理を行わない
+            payload.tag = tagContent;
+            
+            // word_styleが空の場合はデフォルト値を設定
+            if (!payload.word_style) {
+              payload.word_style = 'Wordに記載なし';
+            }
+
+            console.log('文頭・文末の処理後のペイロード:', payload);
+          } catch (error) {
+            console.error('ペイロード処理エラー:', error);
+            throw new Error(`セクション「${section}」のデータ処理に失敗しました`);
+          }
+        } else {
+          // 文頭・文末以外の場合は元のタグをそのまま使用
+          console.log('通常セクションのペイロード:', payload);
+        }
+
+        try {
+          if (existing) {
+            console.log(`セクション「${section}」を更新`);
+            const response = await fetch(`http://localhost:8000/api/rules/${existing.id}/`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            
+            if (!response.ok) {
+              const errorData = await response.json();
+              console.error('更新エラー詳細:', errorData);
+              throw new Error(`セクション「${section}」の更新に失敗しました: ${JSON.stringify(errorData)}`);
+            }
+            
+            console.log(`セクション「${section}」の更新完了`);
+          } else {
+            console.log(`セクション「${section}」を新規作成`);
+            const response = await fetch('http://localhost:8000/api/rules/', {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify(payload),
+            });
+            
+            if (!response.ok) {
+              let errorMessage = `ステータスコード: ${response.status}`;
+              try {
+                // まずJSONとしてパースを試みる
+                const errorData = await response.json();
+                if (errorData.tag) {
+                  errorMessage = `タグエラー: ${errorData.tag.join(', ')}`;
+                } else {
+                  errorMessage = JSON.stringify(errorData);
+                }
+              } catch (jsonError) {
+                // JSONパースに失敗した場合はテキストとして読み取る
+                try {
+                  const textError = await response.text();
+                  errorMessage = textError;
+                } catch (textError) {
+                  errorMessage = '不明なエラーが発生しました';
+                }
+              }
+              console.error('APIエラー:', errorMessage);
+              throw new Error(`セクション「${section}」の作成に失敗しました: ${errorMessage}`);
+            }
+            
+            console.log(`セクション「${section}」の作成完了`);
+          }
+        } catch (error) {
+          console.error(`セクション「${section}」の保存エラー:`, error);
+          throw error;
+        }
+      }
+
+      console.log('全セクションの保存完了');
+      alert('保存しました');
+    } catch (error: any) {
+      console.error('保存エラー:', error);
+      alert(error.message || '保存中にエラーが発生しました');
+    }
   };
   useEffect(() => {
   }, [isConfirmModalOpen]);
@@ -593,12 +684,13 @@ const SettingsScreen = () => {
                 <div className="col-span-2">
                   <label className="block border-b-2 border-gray-500 mb-2 pb-4">
                     タグ：
-                    <input
-                      className="w-full border p-1 mt-1 mb-2"
-                      type="text"
+                    <textarea
+                      className="w-full border p-1 mt-1 mb-2 font-mono"
+                      rows={10}
                       value={formData[activeTabId]?.[title]?.tag || ''}
                       onChange={(e) => handleChange(title, 'tag', e.target.value)}
                       placeholder="例: <h1></h1>など"
+                      style={{ whiteSpace: 'pre', overflowWrap: 'normal', overflowX: 'auto' }}
                     />
                     {errors[activeTabId]?.[title]?.tag && (
                       <p className="text-red-500 text-xs mb-2"> {errors[activeTabId][title].tag}</p>

@@ -1,13 +1,25 @@
-
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
 const SiteNameDisplay = () => {
   const { site } = useParams<{ site: string }>();
+  const [siteName, setSiteName] = useState<string>('');
+
+  useEffect(() => {
+    // URLパラメータのsiteはurlなので、それを使ってサイト名を取得
+    fetch(`http://localhost:8000/api/sites/?url=${site}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.length > 0) {
+          setSiteName(data[0].name);  // APIから返ってきたサイトのnameを使用
+        }
+      })
+      // .catch(error => console.error('Error:', error));
+  }, [site]);
 
   return (
     <div>
-      <h1>Selected Site: {site}</h1>
-      {/* Additional content */}
+      <h1>{siteName}</h1>
     </div>
   );
 };
