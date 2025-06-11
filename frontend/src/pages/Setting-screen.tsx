@@ -118,13 +118,6 @@ const SettingsScreen = () => {
       setTabs(activeSites);
     } catch (error) {
       console.error('Error fetching sites:', error);
-      // エラー時のフォールバック
-      setTabs([
-        { name: 'チアジョブ', id: 'cheerjob' },
-        { name: 'ナースステップ', id: 'nursestep' },
-        { name: 'ソニー', id: 'sony' },
-        { name: 'zoff', id: 'zoff' },
-      ]);
     }
   };
 
