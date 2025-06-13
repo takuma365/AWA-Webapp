@@ -16,7 +16,6 @@ function extractVariables(template: string): string[] {
 
 const GenerationScreen: React.FC = () => {
   const { site } = useParams<{ site: string }>();
-  const [tag, setTag] = useState<string>('');
   const [variables, setVariables] = useState<string[]>([]);
   const [variableValues, setVariableValues] = useState<Record<string, string>>({});
   const [siteInfo, setSiteInfo] = useState<any>(null);
@@ -39,7 +38,6 @@ const GenerationScreen: React.FC = () => {
                 .then(res => res.json())
                 .then(rulesData => {
                   setRules(rulesData);
-                  console.log('取得したrules:', rulesData);
                   // rulesDataから変数を抽出して一意化
                   const varsArray: string[] = [];
                   rulesData.forEach((r: any) => {
@@ -47,7 +45,6 @@ const GenerationScreen: React.FC = () => {
                   });
                   const extractedVars: string[] = Array.from(new Set(varsArray));
                   setVariables(extractedVars);
-                  console.log('抽出された変数:', extractedVars);
                 });
             }
           }
@@ -60,7 +57,6 @@ const GenerationScreen: React.FC = () => {
   const handleVariableChange = (variable: string, value: string) => {
     setVariableValues(prev => {
       const newValues = { ...prev, [variable]: value };
-      console.log('更新された変数の値:', newValues);
       return newValues;
     });
   };

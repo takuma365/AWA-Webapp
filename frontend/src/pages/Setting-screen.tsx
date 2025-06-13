@@ -244,7 +244,8 @@ const SettingsScreen = () => {
         return;
       }
 
-      const newSite = await response.json();
+      // 後で使う
+      // const newSite = await response.json();
       
       // 成功したらローカルステートを更新
       const newTab = { name, id };
