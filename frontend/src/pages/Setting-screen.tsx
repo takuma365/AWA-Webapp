@@ -98,7 +98,6 @@ const SettingsScreen = () => {
   
   // サイトデータを取得する関数
   const fetchSites = async () => {
-    await new Promise(resolve => setTimeout(resolve, 3000)); 
     try {
       const response = await fetch('http://localhost:8000/api/sites/');
       if (!response.ok) {
@@ -330,8 +329,14 @@ const SettingsScreen = () => {
 
   const handleSectionSubmit = (name: string, action: string) => {
     console.log('[DEBUG] handleSectionSubmit called with:', { name, action });
-    
+  
     if (!name || !activeTabId) return;
+  
+    if (action === 'remove') {
+      handleSectionDelete(name); 
+    }
+  
+    // ローカルステートの更新
     setSectionMap((prev) => {
       const current = prev[activeTabId] || [];
       const updated = action === 'add'
@@ -339,15 +344,41 @@ const SettingsScreen = () => {
         : current.filter((section) => section !== name);
       return { ...prev, [activeTabId]: updated };
     });
+  
     setOpenSections((prev) => {
       const updated = { ...prev };
       if (action === 'add') updated[name] = true;
       else delete updated[name];
       return updated;
     });
+  
     setIsSectionModalOpen(false);
   };
+  
 
+  const handleSectionDelete = async (sectionName: string) => {
+    try {
+      // サイト情報からconversion_setting_idを取得
+      const siteRes = await fetch(`http://localhost:8000/api/sites/?url=${activeTabId}`);
+      const sites = await siteRes.json();
+      if (!sites.length) return;
+      const settingId = sites[0].conversion_settings[0]?.id;
+      if (!settingId) return;
+
+      // 該当するRuleを取得
+      const rulesRes = await fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`);
+      const rules = await rulesRes.json();
+      const targetRule = rules.find((r: any) => r.section === sectionName);
+
+      if (targetRule) {
+        await fetch(`http://localhost:8000/api/rules/${targetRule.id}/`, {
+          method: 'DELETE'
+        });
+      }
+    } catch (error) {
+      console.error('セクション削除エラー:', error);
+    }
+  };
 
   const handleConfirm = () => {
     // ① 「削除」のケース

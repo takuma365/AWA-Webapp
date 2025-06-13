@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from .models import Site, ConversionSetting, ConversionRule, ConversionOutput
 
-
 class ConversionRuleSerializer(serializers.ModelSerializer):
     """変換ルールシリアライザ"""
     class Meta:
@@ -23,15 +22,18 @@ class ConversionRuleSerializer(serializers.ModelSerializer):
 
 
 class ConversionSettingSerializer(serializers.ModelSerializer):
-    """変換設定シリアライザ"""
-    rules = ConversionRuleSerializer(many=True, read_only=True)
-    
+    rules = serializers.SerializerMethodField()
+
     class Meta:
         model = ConversionSetting
         fields = [
             'id', 'name', 'css_class_prefix', 'remove_empty_paragraphs',
             'preserve_images', 'image_dir', 'active', 'rules'
         ]
+
+    def get_rules(self, obj):
+        rules = obj.rules.filter(active=True)
+        return ConversionRuleSerializer(rules, many=True).data
 
 
 class SiteSerializer(serializers.ModelSerializer):

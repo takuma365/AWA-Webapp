@@ -18,8 +18,8 @@ const SiteNameDisplay = () => {
   }, [site]);
 
   return (
-    <div>
-      <h1>{siteName}</h1>
+    <div className="w-full text-center mb-4">
+      <h1 className="text-3xl font-bold">{siteName}</h1>
     </div>
   );
 };
