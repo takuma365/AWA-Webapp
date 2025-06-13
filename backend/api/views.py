@@ -89,6 +89,13 @@ class ConversionRuleViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(setting_id=setting_id)
         return queryset
 
+    def destroy(self, request, *args, **kwargs):
+        """DELETE = 論理削除（active = False に）"""
+        instance = self.get_object()
+        instance.active = False
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class ConversionOutputViewSet(viewsets.ReadOnlyModelViewSet):
     """変換出力結果の参照用ViewSet (読み取り専用)"""
@@ -97,7 +104,7 @@ class ConversionOutputViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """設定IDによるフィルタリングを行う"""
-        queryset = super().get_queryset()
+        queryset = ConversionRule.objects.filter(active=True)
         setting_id = self.request.query_params.get('setting_id')
         if setting_id:
             queryset = queryset.filter(setting_id=setting_id)
@@ -280,4 +287,14 @@ class WordDownloadView(APIView):
         response = HttpResponse(full_html, content_type='text/html')
         response['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
         
-        return response 
+        return response
+
+# 新規エンドポイント: JSON生成用APIView
+class GenerateHtmlView(APIView):
+    """JSON生成用のAPIView"""
+    def post(self, request, *args, **kwargs):
+        # フロントエンドから送られてきたJSONデータを取得
+        data = request.data
+        print("Received JSON data for generation:", data)
+        # 受け取ったJSONをそのまま返却
+        return Response(data, status=status.HTTP_200_OK) 

@@ -93,7 +93,6 @@ class ConversionRule(models.Model):
     )
     tag = models.CharField(
         _('タグ'), 
-        max_length=500, 
         help_text=_('HTML形式で入力（例: <h1></h1>）'),
         default='<p></p>'
     )

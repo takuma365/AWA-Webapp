@@ -17,4 +17,5 @@ urlpatterns = [
     # カスタムAPIエンドポイント
     path('convert/', views.WordConversionView.as_view(), name='convert'),
     path('download/', views.WordDownloadView.as_view(), name='download'),
+    path('generate-html/', views.GenerateHtmlView.as_view(), name='generate_html'),
 ] 
