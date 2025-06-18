@@ -1,5 +1,4 @@
 // src/App.tsx
-import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import StartScreen from './pages/Start-screen';
 import SettingsScreen from './pages/Setting-screen';

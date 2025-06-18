@@ -291,10 +291,86 @@ class WordDownloadView(APIView):
 
 # 新規エンドポイント: JSON生成用APIView
 class GenerateHtmlView(APIView):
-    """JSON生成用のAPIView"""
+    """HTML生成用のAPIView"""
     def post(self, request, *args, **kwargs):
-        # フロントエンドから送られてきたJSONデータを取得
-        data = request.data
-        print("Received JSON data for generation:", data)
-        # 受け取ったJSONをそのまま返却
-        return Response(data, status=status.HTTP_200_OK) 
+        import json
+        import tempfile
+        import os
+        from pathlib import Path
+        from .services.xml_to_html_converter import parse_xml_to_html
+        
+        try:
+            # フロントエンドから送られてきたJSONデータを取得
+            data = request.data
+            print("Received JSON data for generation:", data)
+            
+            # 最新のXMLファイルディレクトリを取得
+            xml_data_dir = Path(settings.BASE_DIR) / 'xml_data'
+            if not xml_data_dir.exists():
+                return Response(
+                    {"error": "XMLデータディレクトリが見つかりません。先にWordファイルをアップロードしてください。"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 最新のXMLディレクトリを取得（作成日時順）
+            xml_dirs = [d for d in xml_data_dir.iterdir() if d.is_dir()]
+            if not xml_dirs:
+                return Response(
+                    {"error": "XMLファイルが見つかりません。先にWordファイルをアップロードしてください。"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 最新のディレクトリを取得
+            latest_xml_dir = max(xml_dirs, key=lambda x: x.stat().st_mtime)
+            print(f"最新のXMLディレクトリ: {latest_xml_dir}")
+            
+            # document.xmlファイルの存在確認
+            document_xml_path = latest_xml_dir / 'document.xml'
+            if not document_xml_path.exists():
+                return Response(
+                    {"error": f"document.xmlが見つかりません: {document_xml_path}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 一時的なJSONコンフィグファイルを作成
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as config_file:
+                json.dump(data, config_file, ensure_ascii=False, indent=2)
+                config_file_path = config_file.name
+            
+            # 出力HTMLファイルのパス
+            output_html_path = latest_xml_dir / 'generated_output.html'
+            
+            try:
+                # xml_to_html_converter.pyを実行
+                parse_xml_to_html(
+                    xml_file_path=str(document_xml_path),
+                    output_file_path=str(output_html_path),
+                    json_config=data
+                )
+                
+                # 生成されたHTMLを読み取り
+                with open(output_html_path, 'r', encoding='utf-8') as f:
+                    generated_html = f.read()
+                
+                return Response({
+                    "message": "HTML生成が完了しました。",
+                    "generated_html": generated_html,
+                    "xml_directory": str(latest_xml_dir.relative_to(settings.BASE_DIR)),
+                    "document_xml_path": str(document_xml_path.relative_to(settings.BASE_DIR)),
+                    "output_html_path": str(output_html_path.relative_to(settings.BASE_DIR))
+                }, status=status.HTTP_200_OK)
+                
+            finally:
+                # 一時ファイルを削除
+                if os.path.exists(config_file_path):
+                    os.unlink(config_file_path)
+                    
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"HTML生成エラー: {error_details}")
+            
+            return Response(
+                {"error": f"HTML生成中にエラーが発生しました: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            ) 
