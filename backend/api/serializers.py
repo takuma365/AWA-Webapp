@@ -48,33 +48,20 @@ class SiteSerializer(serializers.ModelSerializer):
 class FileUploadSerializer(serializers.Serializer):
     """ファイルアップロードシリアライザ"""
     file = serializers.FileField(required=True)
-    site_url = serializers.CharField(required=True, help_text='サイトのURL')
+    setting_id = serializers.IntegerField(required=True, help_text='変換設定のID')
 
-    def validate_site_url(self, value):
-        """サイトURLの存在確認"""
+    def validate_setting_id(self, value):
+        """変換設定IDの存在確認"""
         try:
-            site = Site.objects.get(url=value, active=True)
+            setting = ConversionSetting.objects.get(id=value, active=True)
             return value
-        except Site.DoesNotExist:
-            raise serializers.ValidationError('指定されたサイトが見つかりません。')
+        except ConversionSetting.DoesNotExist:
+            raise serializers.ValidationError('指定された変換設定が見つかりません。')
 
     def get_conversion_setting(self):
-        """サイトのデフォルト変換設定を取得"""
-        site_url = self.validated_data['site_url']
-        site = Site.objects.get(url=site_url, active=True)
-        
-        # デフォルト変換設定を取得（なければ作成）
-        setting, created = ConversionSetting.objects.get_or_create(
-            site=site,
-            name='デフォルト設定',
-            defaults={
-                'css_class_prefix': f'{site.url}-',
-                'remove_empty_paragraphs': True,
-                'preserve_images': True,
-                'image_dir': 'images',
-                'active': True
-            }
-        )
+        """変換設定を取得"""
+        setting_id = self.validated_data['setting_id']
+        setting = ConversionSetting.objects.get(id=setting_id, active=True)
         return setting
 
 

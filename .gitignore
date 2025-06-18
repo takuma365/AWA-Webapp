@@ -4,5 +4,5 @@
 result.json
 downloaded.html
 
-# 一時的なXMLデータディレクトリを無視
-backend/xml_data/test_*
+# XMLデータディレクトリを無視（アップロードされたWordファイルの解凍データ）
+backend/xml_data/

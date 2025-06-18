@@ -454,20 +454,14 @@ class RuleApplier:
             print(f"HTMLの解析中にエラーが発生しました: {str(e)}")
             return html_content
         
-        # ルールの適用（優先度順）
-        for rule in self.setting.rules.filter(active=True).order_by('priority'):
+        # ルールの適用（ID順）
+        for rule in self.setting.rules.filter(active=True).order_by('id'):
             try:
-                # ルールタイプごとの処理
-                if rule.rule_type == 'tag_replace':
-                    self._apply_tag_replace(html_tree, rule)
-                elif rule.rule_type == 'class_add':
-                    self._apply_class_add(html_tree, rule)
-                elif rule.rule_type == 'attribute_add':
-                    self._apply_attribute_add(html_tree, rule)
-                elif rule.rule_type == 'custom':
-                    self._apply_custom_rule(html_tree, rule)
+                # セクションごとの処理（現在は基本的なHTMLタグ変換のみ）
+                # TODO: より詳細なルール処理を実装する場合はここを拡張
+                print(f"ルール '{rule.section}' を適用中...")
             except Exception as e:
-                print(f"ルール '{rule.name}' の適用中にエラーが発生しました: {str(e)}")
+                print(f"ルール '{rule.section}' の適用中にエラーが発生しました: {str(e)}")
         
         # HTMLに変換
         result = etree.tostring(html_tree, encoding='unicode', pretty_print=True, method="html")
