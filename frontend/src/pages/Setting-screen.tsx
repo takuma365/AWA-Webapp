@@ -99,7 +99,7 @@ const SettingsScreen = () => {
   // サイトデータを取得する関数
   const fetchSites = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/sites/');
+      const response = await fetch('/api/sites/');
       if (!response.ok) {
         throw new Error('サイトデータの取得に失敗しました');
       }
@@ -159,7 +159,7 @@ const SettingsScreen = () => {
       if (!activeTabId) return;
 
       // サイト情報から変換設定IDを取得
-      const siteRes = await fetch(`http://localhost:8000/api/sites/?url=${activeTabId}`);
+      const siteRes = await fetch(`/api/sites/?url=${activeTabId}`);
       const sites = await siteRes.json();
       if (!sites.length) return;
       const site = sites[0];
@@ -168,7 +168,7 @@ const SettingsScreen = () => {
       if (!settingId) return;
 
       // ルール一覧を取得
-      const rulesRes = await fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`);
+      const rulesRes = await fetch(`/api/rules/?setting_id=${settingId}`);
       const rules = await rulesRes.json();
 
       // sectionMapとformDataを初期化
@@ -209,7 +209,7 @@ const SettingsScreen = () => {
     
     try {
       // バックエンドでの重複チェック
-      const checkResponse = await fetch(`http://localhost:8000/api/sites/?url=${encodeURIComponent(id)}`);
+      const checkResponse = await fetch(`/api/sites/?url=${encodeURIComponent(id)}`);
       if (checkResponse.ok) {
         const existingSites = await checkResponse.json();
         if (existingSites.length > 0) {
@@ -219,7 +219,7 @@ const SettingsScreen = () => {
       }
 
       // バックエンドに新しいサイトを作成
-      const response = await fetch('http://localhost:8000/api/sites/', {
+      const response = await fetch('/api/sites/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -267,14 +267,14 @@ const SettingsScreen = () => {
   const handleTabDelete = async (id: string) => {
     try {
       // まずバックエンドから削除対象のサイトを検索
-      const sitesResponse = await fetch('http://localhost:8000/api/sites/');
+      const sitesResponse = await fetch('/api/sites/');
       if (sitesResponse.ok) {
         const sites = await sitesResponse.json();
         const targetSite = sites.find((site: any) => site.url === id);
         
         if (targetSite) {
           // バックエンドからサイトを削除（論理削除: active = false）
-          const deleteResponse = await fetch(`http://localhost:8000/api/sites/${targetSite.id}/`, {
+          const deleteResponse = await fetch(`/api/sites/${targetSite.id}/`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
@@ -360,19 +360,19 @@ const SettingsScreen = () => {
   const handleSectionDelete = async (sectionName: string) => {
     try {
       // サイト情報からconversion_setting_idを取得
-      const siteRes = await fetch(`http://localhost:8000/api/sites/?url=${activeTabId}`);
+      const siteRes = await fetch(`/api/sites/?url=${activeTabId}`);
       const sites = await siteRes.json();
       if (!sites.length) return;
       const settingId = sites[0].conversion_settings[0]?.id;
       if (!settingId) return;
 
       // 該当するRuleを取得
-      const rulesRes = await fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`);
+      const rulesRes = await fetch(`/api/rules/?setting_id=${settingId}`);
       const rules = await rulesRes.json();
       const targetRule = rules.find((r: any) => r.section === sectionName);
 
       if (targetRule) {
-        await fetch(`http://localhost:8000/api/rules/${targetRule.id}/`, {
+        await fetch(`/api/rules/${targetRule.id}/`, {
           method: 'DELETE'
         });
       }
@@ -520,7 +520,7 @@ const SettingsScreen = () => {
       console.log('保存開始:', activeTabId);
       
       // サイト→変換設定ID取得
-      const siteRes = await fetch(`http://localhost:8000/api/sites/?url=${activeTabId}`);
+      const siteRes = await fetch(`/api/sites/?url=${activeTabId}`);
       console.log('サイトAPIレスポンス:', { status: siteRes.status });
       
       const sites = await siteRes.json();
@@ -541,7 +541,7 @@ const SettingsScreen = () => {
       }
 
       // 既存ルール一覧を取得
-      const rulesRes = await fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`);
+      const rulesRes = await fetch(`/api/rules/?setting_id=${settingId}`);
       const rules = await rulesRes.json();
       console.log('既存ルール:', rules);
 
@@ -595,7 +595,7 @@ const SettingsScreen = () => {
         try {
           if (existing) {
             console.log(`セクション「${section}」を更新`);
-            const response = await fetch(`http://localhost:8000/api/rules/${existing.id}/`, {
+            const response = await fetch(`/api/rules/${existing.id}/`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
@@ -610,7 +610,7 @@ const SettingsScreen = () => {
             console.log(`セクション「${section}」の更新完了`);
           } else {
             console.log(`セクション「${section}」を新規作成`);
-            const response = await fetch('http://localhost:8000/api/rules/', {
+            const response = await fetch('/api/rules/', {
               method: 'POST',
               headers: { 
                 'Content-Type': 'application/json',

@@ -7,7 +7,7 @@ const SiteNameDisplay = () => {
 
   useEffect(() => {
     // URLパラメータのsiteはurlなので、それを使ってサイト名を取得
-    fetch(`http://localhost:8000/api/sites/?url=${site}`)
+    fetch(`/api/sites/?url=${site}`)
       .then(response => response.json())
       .then(data => {
         if (data.length > 0) {

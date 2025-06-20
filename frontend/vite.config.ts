@@ -5,15 +5,23 @@ import react from '@vitejs/plugin-react-swc'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173,
+    port: 80,
+    host: '0.0.0.0',
     strictPort: true,  // 指定したポートが使用中の場合はエラーを出す
     hmr: {
-      port: 5173,
+      port: 80,
       protocol: 'ws',
-      host: 'localhost'
+      host: '54.64.110.132'
     },
     watch: {
       usePolling: true
+    },
+    proxy: {
+      '/api': {
+        target: 'http://backend:8000',
+        changeOrigin: true,
+        secure: false
+      }
     }
   }
 })

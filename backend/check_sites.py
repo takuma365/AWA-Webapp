@@ -4,7 +4,7 @@ import json
 
 def check_sites():
     """登録されているサイト一覧を確認"""
-    url = "http://localhost:8000/api/sites/"
+    url = "http://54.64.110.132:8000/api/sites/"
     
     try:
         response = requests.get(url)
@@ -32,7 +32,7 @@ def check_sites():
 
 def create_test_site():
     """テスト用サイトを作成"""
-    url = "http://localhost:8000/api/sites/"
+    url = "http://54.64.110.132:8000/api/sites/"
     data = {
         "name": "CheerjobTest",
         "url": "cheerjob"

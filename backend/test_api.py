@@ -4,7 +4,7 @@ import json
 
 # APIテスト用スクリプト
 def test_convert_api():
-    url = "http://localhost:8000/api/convert/"
+    url = "http://54.64.110.132:8000/api/convert/"
     
     # テストファイルのパス
     file_path = "/app/test_data/test.docx"

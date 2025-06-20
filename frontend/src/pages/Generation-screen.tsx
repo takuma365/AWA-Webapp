@@ -26,7 +26,7 @@ const GenerationScreen: React.FC = () => {
   useEffect(() => {
     // サイト情報を取得
     if (site) {
-      fetch(`http://localhost:8000/api/sites/?url=${site}`)
+      fetch(`/api/sites/?url=${site}`)
         .then(res => res.json())
         .then(data => {
           if (data.length > 0) {
@@ -36,7 +36,7 @@ const GenerationScreen: React.FC = () => {
             // サイトの変換設定からrulesを取得
             if (data[0].conversion_settings && data[0].conversion_settings.length > 0) {
               const settingId = data[0].conversion_settings[0].id;
-              fetch(`http://localhost:8000/api/rules/?setting_id=${settingId}`)
+              fetch(`/api/rules/?setting_id=${settingId}`)
                 .then(res => res.json())
                 .then(rulesData => {
                   setRules(rulesData);
@@ -72,7 +72,7 @@ const GenerationScreen: React.FC = () => {
     console.log('送信するJSONデータ:', newData);
 
     try {
-      const response = await fetch('http://localhost:8000/api/generate-html/', {
+      const response = await fetch('/api/generate-html/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -144,7 +144,7 @@ const GenerationScreen: React.FC = () => {
           return;
         }
 
-        const response = await fetch('http://localhost:8000/api/convert/', {
+        const response = await fetch('/api/convert/', {
           method: 'POST',
           body: formData,
         });

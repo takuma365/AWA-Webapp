@@ -38,7 +38,7 @@ const StartScreen = () => {
   useEffect(() => {
     const fetchSites = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/sites/');
+        const response = await fetch('/api/sites/');
         if (!response.ok) {
           throw new Error('サイトデータの取得に失敗しました');
         }
