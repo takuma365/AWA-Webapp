@@ -5,7 +5,7 @@ from django.utils.translation import gettext_lazy as _
 class Site(models.Model):
     """サイト設定モデル"""
     name = models.CharField(_('サイト名'), max_length=255)
-    url = models.CharField(_('URL'), max_length=100, unique=True, help_text=_('サイトのURL（英小文字）'), null=True, blank=True)
+    url = models.CharField(_('URL'), max_length=100, unique=True, help_text=_('サイトのURL（英小文字）'), blank=True)
     active = models.BooleanField(_('有効'), default=True)
     created_at = models.DateTimeField(_('作成日時'), auto_now_add=True)
     updated_at = models.DateTimeField(_('更新日時'), auto_now=True)
@@ -92,7 +92,8 @@ class ConversionRule(models.Model):
         default='大見出し'
     )
     tag = models.CharField(
-        _('タグ'), 
+        _('タグ'),
+        max_length=500,
         help_text=_('HTML形式で入力（例: <h1></h1>）'),
         default='<p></p>'
     )
@@ -108,19 +109,17 @@ class ConversionRule(models.Model):
         _('前にある文字列'),
         max_length=500,
         blank=True,
-        null=True,
         help_text=_('改行は￥nで入力')
     )
     suffix_text = models.CharField(
         _('後ろにある文字列'),
         max_length=500,
         blank=True,
-        null=True,
         help_text=_('改行は￥nで入力')
     )
     active = models.BooleanField(_('有効'), default=True)
-    created_at = models.DateTimeField(_('作成日時'), auto_now_add=True, null=True, blank=True)
-    updated_at = models.DateTimeField(_('更新日時'), auto_now=True, null=True, blank=True)
+    created_at = models.DateTimeField(_('作成日時'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('更新日時'), auto_now=True)
     
     class Meta:
         verbose_name = _('変換ルール')
@@ -137,7 +136,7 @@ class ConversionOutput(models.Model):
     setting = models.ForeignKey(ConversionSetting, on_delete=models.CASCADE, related_name='outputs')
     original_filename = models.CharField(max_length=255)
     html_content = models.TextField()
-    html_path = models.CharField(max_length=255, blank=True, null=True)
+    html_path = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
