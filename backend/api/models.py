@@ -117,6 +117,11 @@ class ConversionRule(models.Model):
         blank=True,
         help_text=_('改行は￥nで入力')
     )
+    split_on_period = models.BooleanField(
+        _('句点で閉じる'),
+        default=False,
+        help_text=_('句点（。）で段落を分割してタグを閉じる')
+    )
     active = models.BooleanField(_('有効'), default=True)
     created_at = models.DateTimeField(_('作成日時'), auto_now_add=True)
     updated_at = models.DateTimeField(_('更新日時'), auto_now=True)

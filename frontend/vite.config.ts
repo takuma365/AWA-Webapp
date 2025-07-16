@@ -11,7 +11,7 @@ export default defineConfig({
     hmr: {
       port: 80,
       protocol: 'ws',
-      host: '54.64.110.132'
+      host: '35.78.209.134'
     },
     watch: {
       usePolling: true

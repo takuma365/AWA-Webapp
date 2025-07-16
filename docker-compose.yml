@@ -12,7 +12,7 @@ services:
     command: npm run dev -- --host 0.0.0.0 --port 5173 --strictPort
     environment:
       - NODE_ENV=development
-      - VITE_API_URL=http://54.64.110.132:8000/api
+      - VITE_API_URL=http://35.78.209.134:8000/api
     depends_on:
       - backend
 

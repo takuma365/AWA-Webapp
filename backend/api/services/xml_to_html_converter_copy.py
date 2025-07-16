@@ -477,7 +477,6 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # 見出し1の処理
             if pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') == '1':
-                print("【DEBUG】見出し1の処理に入りました")
                 heading_counters[1] += 1
                 heading_counters[2] = 0  # 見出し2のカウンターをリセット
                 heading_counters['link_counter'] = 0  # リンク項目カウンターもリセット
@@ -496,7 +495,6 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # TOC（目次）スタイルの処理
             elif pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') == '10':
-                print("【DEBUG】TOC（目次）スタイルの処理に入りました")
                 # TOCエントリを処理してリンクリストに変換
                 toc_entry = process_toc_entry(p, namespaces)
                 if toc_entry:
@@ -507,7 +505,6 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # 見出し2の処理
             elif pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') == '2':
-                print("【DEBUG】見出し2の処理に入りました")
                 # TOCリストが存在する場合は、先に出力
                 if hasattr(process_toc_entry, 'toc_list') and process_toc_entry.toc_list:
                     toc_html = generate_toc_links(process_toc_entry.toc_list)
@@ -539,7 +536,6 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # パラグラフ内の青色テキストとコメントのURLをリンクとして処理
             elif has_blue_text_and_url(p, comment_info, namespaces):
-                print("【DEBUG】青色テキストとURLの処理に入りました")
                 # 青色テキストを取得
                 blue_text_segments = find_blue_text_segments(p, namespaces)
                 
@@ -578,8 +574,6 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # 罫線内の青色テキストの場合は何もしない（見出し直後のリンクリストに任せる）
             elif is_paragraph_bordered(p, namespaces) and has_blue_text(p, namespaces):
-                print("【DEBUG】罫線内の青色テキストを検出")
-                print("【DEBUG】罫線内の青色テキストを検出")
                 # 青色テキストの内容を確認
                 text_content = get_text_content(p, namespaces)
                 if text_content and text_content.strip().startswith('・'):
@@ -642,13 +636,8 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # マーカー、太字、罫線の処理
             else:
-                print("【DEBUG】通常のパラグラフ処理に入りました")
                 # 罫線の判定
                 is_bordered = is_paragraph_bordered(p, namespaces)
-                print("【DEBUG】罫線判定結果:", is_bordered)
-                if is_bordered:
-                    text_content = get_text_content(p, namespaces)
-                    print("【DEBUG】罫線内テキスト:", repr(text_content))
                 
                 # パラグラフ内のテキスト実行を処理し、マーカーや太字を適切に適用
                 formatted_content = process_paragraph_runs(p, namespaces)
@@ -684,7 +673,6 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
         del process_blue_text_links.numbered_link_list_items
     
     # 連続するdivの処理
-    print("【DEBUG】combine_consecutive_divs呼び出し直前のhtml_elements:", repr(html_elements))
     processed_html = combine_consecutive_divs(html_elements)
     
     # 最終的なHTMLの修正
@@ -992,9 +980,6 @@ def get_link_from_comments(p, comment_info, namespaces):
 
 def combine_consecutive_divs(html_elements):
     """連続するdivを一つにまとめ、内容を条件に応じて整形する（動的テンプレート対応）"""
-    print("【DEBUG】combine_consecutive_divs関数が呼び出されました")
-    print("【DEBUG】関数内のhtml_elements:", repr(html_elements))
-    
     result = ""
     div_pattern = re.compile(r'<div[^>]*>(.*?)</div>', re.DOTALL)
     
@@ -1178,52 +1163,19 @@ def get_cell_background_style(tc, namespaces):
 
 def is_paragraph_bordered(p, namespaces):
     """パラグラフが罫線を持つかを判定"""
-    print("【DEBUG】is_paragraph_bordered関数が呼び出されました")
-    
     # 直接パラグラフに罫線属性がある場合
     pBdr = p.find('.//w:pBdr', namespaces)
     if pBdr is not None:
-        print("【DEBUG】pBdr要素を検出: True")
         return True
     
     # 段落内のボックス属性を確認
     shd_elements = p.findall('.//w:shd[@w:fill]', namespaces)
-    print(f"【DEBUG】shd_elements数: {len(shd_elements)}")
     if shd_elements:
         for shd in shd_elements:
             fill_value = shd.get('{' + namespaces['w'] + '}fill')
-            print(f"【DEBUG】fill_value: {fill_value}")
             if fill_value and fill_value != 'auto':
-                print("【DEBUG】有効なfill_valueを検出: True")
                 return True
     
-    # その他の罫線判定方法を追加
-    # 背景色による判定
-    bg_elements = p.findall('.//w:shd', namespaces)
-    print(f"【DEBUG】bg_elements数: {len(bg_elements)}")
-    for bg in bg_elements:
-        fill = bg.get('{' + namespaces['w'] + '}fill')
-        color = bg.get('{' + namespaces['w'] + '}color')
-        print(f"【DEBUG】bg_fill: {fill}, bg_color: {color}")
-        if fill and fill != 'auto':
-            print("【DEBUG】背景色による罫線判定: True")
-            return True
-    
-    # 段落のスタイル属性を確認
-    pPr = p.find('.//w:pPr', namespaces)
-    if pPr is not None:
-        print("【DEBUG】pPr要素を検出")
-        # スタイル名を確認
-        pStyle = pPr.find('.//w:pStyle', namespaces)
-        if pStyle is not None:
-            style_val = pStyle.get('{' + namespaces['w'] + '}val')
-            print(f"【DEBUG】段落スタイル: {style_val}")
-            # 罫線に関連するスタイル名をチェック
-            if style_val and any(keyword in style_val.lower() for keyword in ['border', 'box', 'frame', 'outline']):
-                print("【DEBUG】罫線関連スタイルを検出: True")
-                return True
-    
-    print("【DEBUG】罫線判定結果: False")
     return False
 
 def process_paragraph_runs(p, namespaces):
@@ -1977,8 +1929,6 @@ def process_bullet_list_items(items, list_template):
     Returns:
         str: 適切なHTMLリスト構造
     """
-    print("【DEBUG】process_bullet_list_items関数が呼び出されました")
-    
     if not items or not list_template:
         return ""
 

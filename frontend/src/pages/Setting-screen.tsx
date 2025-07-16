@@ -15,6 +15,7 @@ type SectionFields = {
   extraStyle: string;
   prefix: string;
   suffix: string;
+  splitOnPeriod: string;
 };
 
 const selfClosingTags = new Set([
@@ -184,6 +185,7 @@ const SettingsScreen = () => {
           extraStyle: rule.marker ? 'marker' : '',
           prefix: rule.prefix_text || '',
           suffix: rule.suffix_text || '',
+          splitOnPeriod: rule.split_on_period ? 'true' : '',
         };
       });
       setFormData((prev) => ({ ...prev, [activeTabId]: newFormData }));
@@ -563,6 +565,7 @@ const SettingsScreen = () => {
           marker: data.extraStyle === 'marker',
           prefix_text: data.prefix || existing?.prefix_text || '',
           suffix_text: data.suffix || existing?.suffix_text || '',
+          split_on_period: data.splitOnPeriod === 'true',
           active: true,
         };
 
@@ -763,6 +766,15 @@ const SettingsScreen = () => {
                         onChange={(e) => handleChange(title, 'extraStyle', e.target.checked ? 'marker' : '')}
                       />
                       マーカー
+                    </label>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        className="mr-1"
+                        checked={formData[activeTabId]?.[title]?.splitOnPeriod === 'true'}
+                        onChange={(e) => handleChange(title, 'splitOnPeriod', e.target.checked ? 'true' : '')}
+                      />
+                      句点で閉じる
                     </label>
                   </div>
                 </div>

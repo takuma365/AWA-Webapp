@@ -296,6 +296,7 @@ class GenerateHtmlView(APIView):
         import json
         import tempfile
         import os
+        import traceback
         from pathlib import Path
         from .services.xml_to_html_converter import parse_xml_to_html
         
@@ -306,6 +307,9 @@ class GenerateHtmlView(APIView):
             
             # 最新のXMLファイルディレクトリを取得
             xml_data_dir = Path(settings.BASE_DIR) / 'xml_data'
+            print(f"XML data directory path: {xml_data_dir}")
+            print(f"XML data directory exists: {xml_data_dir.exists()}")
+            
             if not xml_data_dir.exists():
                 return Response(
                     {"error": "XMLデータディレクトリが見つかりません。先にWordファイルをアップロードしてください。"},
@@ -314,6 +318,8 @@ class GenerateHtmlView(APIView):
             
             # 最新のXMLディレクトリを取得（作成日時順）
             xml_dirs = [d for d in xml_data_dir.iterdir() if d.is_dir()]
+            print(f"Found XML directories: {[str(d) for d in xml_dirs]}")
+            
             if not xml_dirs:
                 return Response(
                     {"error": "XMLファイルが見つかりません。先にWordファイルをアップロードしてください。"},
@@ -326,6 +332,9 @@ class GenerateHtmlView(APIView):
             
             # document.xmlファイルの存在確認
             document_xml_path = latest_xml_dir / 'document.xml'
+            print(f"Document XML path: {document_xml_path}")
+            print(f"Document XML exists: {document_xml_path.exists()}")
+            
             if not document_xml_path.exists():
                 return Response(
                     {"error": f"document.xmlが見つかりません: {document_xml_path}"},
@@ -336,21 +345,27 @@ class GenerateHtmlView(APIView):
             with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as config_file:
                 json.dump(data, config_file, ensure_ascii=False, indent=2)
                 config_file_path = config_file.name
+                print(f"Created temporary config file: {config_file_path}")
             
             # 出力HTMLファイルのパス
             output_html_path = latest_xml_dir / 'generated_output.html'
+            print(f"Output HTML path: {output_html_path}")
             
             try:
+                print("Starting XML to HTML conversion...")
                 # xml_to_html_converter.pyを実行
                 parse_xml_to_html(
                     xml_file_path=str(document_xml_path),
                     output_file_path=str(output_html_path),
                     json_config=data
                 )
+                print("XML to HTML conversion completed successfully")
                 
                 # 生成されたHTMLを読み取り
                 with open(output_html_path, 'r', encoding='utf-8') as f:
                     generated_html = f.read()
+                
+                print(f"Generated HTML length: {len(generated_html)} characters")
                 
                 return Response({
                     "message": "HTML生成が完了しました。",
@@ -360,17 +375,23 @@ class GenerateHtmlView(APIView):
                     "output_html_path": str(output_html_path.relative_to(settings.BASE_DIR))
                 }, status=status.HTTP_200_OK)
                 
+            except Exception as conversion_error:
+                print(f"XML to HTML conversion error: {str(conversion_error)}")
+                print(f"Conversion error traceback: {traceback.format_exc()}")
+                raise conversion_error
+                
             finally:
                 # 一時ファイルを削除
                 if os.path.exists(config_file_path):
                     os.unlink(config_file_path)
+                    print(f"Removed temporary config file: {config_file_path}")
                     
         except Exception as e:
-            import traceback
             error_details = traceback.format_exc()
-            print(f"HTML生成エラー: {error_details}")
+            print(f"HTML生成エラー: {str(e)}")
+            print(f"詳細なエラー情報: {error_details}")
             
             return Response(
-                {"error": f"HTML生成中にエラーが発生しました: {str(e)}"},
+                {"error": f"HTML生成中にエラーが発生しました: {str(e)}", "details": error_details},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             ) 

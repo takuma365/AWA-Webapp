@@ -7,7 +7,7 @@ class ConversionRuleSerializer(serializers.ModelSerializer):
         model = ConversionRule
         fields = [
             'id', 'setting', 'section', 'tag', 'word_style', 'bold', 'marker',
-            'prefix_text', 'suffix_text', 'active', 'created_at', 'updated_at'
+            'prefix_text', 'suffix_text', 'split_on_period', 'active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
         extra_kwargs = {
@@ -18,6 +18,7 @@ class ConversionRuleSerializer(serializers.ModelSerializer):
             'suffix_text': {'required': False, 'allow_blank': True, 'allow_null': True},
             'bold': {'required': False},
             'marker': {'required': False},
+            'split_on_period': {'required': False},
         }
 
 
