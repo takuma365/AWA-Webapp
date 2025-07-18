@@ -1229,32 +1229,74 @@ def convert_table_to_html(tbl_element, namespaces):
                     cell_content += formatted_content
                     if i < len(paragraphs) - 1:
                         cell_content += '<br />'
+            
+            # 太字の場合はth、そうでなければtdを使用
             if is_bold:
-                # thテンプレートのスタイルを適用
-                style_attr = ''
-                if th_style:
-                    style_attr = f' style="{th_style}'
-                    if bg_color_style:
-                        style_attr += '; ' + bg_color_style
-                    style_attr += '"'
+                # thテンプレートを使用
+                if table_cell_th_template and '{content}' in table_cell_th_template:
+                    # テンプレートに{content}プレースホルダーがある場合
+                    style_attr = ''
+                    if th_style:
+                        style_attr = f' style="{th_style}'
+                        if bg_color_style:
+                            style_attr += '; ' + bg_color_style
+                        style_attr += '"'
+                    else:
+                        # デフォルトのthスタイル
+                        style_attr = ' style="text-align: center;'
+                        if bg_color_style:
+                            style_attr += bg_color_style
+                        style_attr += '"'
+                    
+                    # テンプレートの{style}プレースホルダーを置換
+                    th_html = table_cell_th_template.replace('{style}', style_attr)
+                    # {content}プレースホルダーを実際の内容で置換
+                    th_html = th_html.replace('{content}', cell_content)
+                    row_content += th_html
                 else:
-                    # デフォルトのthスタイル
-                    style_attr = ' style="text-align: center;'
-                    if bg_color_style:
-                        style_attr += bg_color_style
-                    style_attr += '"'
-                row_content += f'<th{style_attr}>{cell_content}</th>'
+                    # テンプレートがない場合は通常のthタグ
+                    style_attr = ''
+                    if th_style:
+                        style_attr = f' style="{th_style}'
+                        if bg_color_style:
+                            style_attr += '; ' + bg_color_style
+                        style_attr += '"'
+                    else:
+                        # デフォルトのthスタイル
+                        style_attr = ' style="text-align: center;'
+                        if bg_color_style:
+                            style_attr += bg_color_style
+                        style_attr += '"'
+                    row_content += f'<th{style_attr}>{cell_content}</th>'
             else:
-                # tdテンプレートのスタイルを適用
-                style_attr = ''
-                if td_style:
-                    style_attr = f' style="{td_style}'
-                    if bg_color_style:
-                        style_attr += '; ' + bg_color_style
-                    style_attr += '"'
-                elif bg_color_style:
-                    style_attr = f' style="{bg_color_style}"'
-                row_content += f'<td{style_attr}>{cell_content}</td>'
+                # tdテンプレートを使用
+                if table_cell_td_template and '{content}' in table_cell_td_template:
+                    # テンプレートに{content}プレースホルダーがある場合
+                    style_attr = ''
+                    if td_style:
+                        style_attr = f' style="{td_style}'
+                        if bg_color_style:
+                            style_attr += '; ' + bg_color_style
+                        style_attr += '"'
+                    elif bg_color_style:
+                        style_attr = f' style="{bg_color_style}"'
+                    
+                    # テンプレートの{style}プレースホルダーを置換
+                    td_html = table_cell_td_template.replace('{style}', style_attr)
+                    # {content}プレースホルダーを実際の内容で置換
+                    td_html = td_html.replace('{content}', cell_content)
+                    row_content += td_html
+                else:
+                    # テンプレートがない場合は通常のtdタグ
+                    style_attr = ''
+                    if td_style:
+                        style_attr = f' style="{td_style}'
+                        if bg_color_style:
+                            style_attr += '; ' + bg_color_style
+                        style_attr += '"'
+                    elif bg_color_style:
+                        style_attr = f' style="{bg_color_style}"'
+                    row_content += f'<td{style_attr}>{cell_content}</td>'
         table_content += f'<tr>{row_content}</tr>'
     result = table_template.format(content=table_content)
     return result
