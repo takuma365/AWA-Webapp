@@ -16,6 +16,7 @@ type SectionFields = {
   prefix: string;
   suffix: string;
   splitOnPeriod: string;
+  closingTags: string; // 追加: セクションの終わりに付ける閉じタグ
 };
 
 const selfClosingTags = new Set([
@@ -94,6 +95,11 @@ const SettingsScreen = () => {
   const [confirmAction, setConfirmAction] = useState<'save' | 'delete-tab' | 'delete-tab-data'>();
   const [actionType, setActionType] = useState<'add' | 'remove'>('add');
   const [targetTabId, setTargetTabId] = useState<string>('');
+  // 追加: clientDomainのstate
+  const [clientDomain, setClientDomain] = useState<string>('');
+  const [clientDomainEditMode, setClientDomainEditMode] = useState<boolean>(false);
+  // 追加: clientDomainOmitのstate
+  const [clientDomainOmit, setClientDomainOmit] = useState<boolean>(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   
@@ -186,6 +192,7 @@ const SettingsScreen = () => {
           prefix: rule.prefix_text || '',
           suffix: rule.suffix_text || '',
           splitOnPeriod: rule.split_on_period ? 'true' : '',
+          closingTags: rule.closing_tags || '', // 追加: closingTagsの初期化
         };
       });
       setFormData((prev) => ({ ...prev, [activeTabId]: newFormData }));
@@ -200,8 +207,9 @@ const SettingsScreen = () => {
       [activeTabId]: {}
     }));
   }, [activeTabId]);
-  const handleTabSubmit = async (name: string, id: string) => {
-    console.log('[DEBUG] handleTabSubmit called with:', { name, id });
+  // TabModalのonSubmitの型を修正
+  const handleTabSubmit = async (name: string, id: string, clientDomain: string) => {
+    console.log('[DEBUG] handleTabSubmit called with:', { name, id, clientDomain });
     
     // ローカルでの重複チェック
     if (tabs.some((tab) => tab.id === id)) {
@@ -229,6 +237,7 @@ const SettingsScreen = () => {
         body: JSON.stringify({
           name: name,
           url: id,
+          client_domain: clientDomain,
           active: true
         })
       });
@@ -566,6 +575,7 @@ const SettingsScreen = () => {
           prefix_text: data.prefix || existing?.prefix_text || '',
           suffix_text: data.suffix || existing?.suffix_text || '',
           split_on_period: data.splitOnPeriod === 'true',
+          closing_tags: data.closingTags || existing?.closing_tags || '', // 追加: closing_tagsの保存
           active: true,
         };
 
@@ -663,6 +673,44 @@ const SettingsScreen = () => {
   useEffect(() => {
   }, [isConfirmModalOpen]);
   const targetTabName = tabs.find(tab => tab.id === targetTabId)?.name;
+
+  // タブ切り替え時にclient_domainを取得
+  useEffect(() => {
+    const fetchClientDomain = async () => {
+      if (!activeTabId) return;
+      const res = await fetch(`/api/sites/?url=${activeTabId}`);
+      const sites = await res.json();
+      if (sites.length > 0) {
+        setClientDomain(sites[0].client_domain || '');
+        setClientDomainOmit(!!sites[0].client_domain_omit);
+      } else {
+        setClientDomain('');
+        setClientDomainOmit(false);
+      }
+    };
+    fetchClientDomain();
+  }, [activeTabId]);
+
+  // クライアントドメイン保存処理
+  const handleClientDomainSave = async () => {
+    if (!activeTabId) return;
+    // サイトID取得
+    const res = await fetch(`/api/sites/?url=${activeTabId}`);
+    const sites = await res.json();
+    if (!sites.length) return;
+    const siteId = sites[0].id;
+    const response = await fetch(`/api/sites/${siteId}/`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_domain: clientDomain, client_domain_omit: clientDomainOmit })
+    });
+    if (response.ok) {
+      alert('クライアントドメインを保存しました');
+      setClientDomainEditMode(false);
+    } else {
+      alert('保存に失敗しました');
+    }
+  };
 
   return (
     <div className="p-4 max-w-4xl mx-auto">
@@ -803,6 +851,18 @@ const SettingsScreen = () => {
                     onChange={(e) => handleChange(title, 'suffix', e.target.value)}
                   />
                 </label>
+                {(title === '大見出し' || title === '中見出し') && (
+                  <label className="col-span-2">
+                    セクションの終わりに付ける閉じタグ：
+                    <textarea
+                      className="w-full border p-1 mt-1"
+                      rows={2}
+                      value={formData[activeTabId]?.[title]?.closingTags || ''}
+                      onChange={(e) => handleChange(title, 'closingTags', e.target.value)}
+                      placeholder="例: </div></section>など"
+                    />
+                  </label>
+                )}
               </form>
             </div>
           )}
@@ -840,6 +900,37 @@ const SettingsScreen = () => {
     保存する
   </button>
 </div>
+      {/* タブUIの下あたりに表示・編集フォームを追加 */}
+      <div className="mt-4 mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">クライアントサイトのドメイン</label>
+        {clientDomainEditMode ? (
+          <div className="flex gap-2 items-center">
+            <input
+              type="text"
+              className="border p-1 rounded w-96"
+              value={clientDomain}
+              onChange={e => setClientDomain(e.target.value)}
+              placeholder="例：https://client.com"
+            />
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={clientDomainOmit}
+                onChange={e => setClientDomainOmit(e.target.checked)}
+              />
+              ドメインURLを省略する（内部リンク時）
+            </label>
+            <button className="px-2 py-1 bg-blue-500 text-white rounded" onClick={handleClientDomainSave}>保存</button>
+            <button className="px-2 py-1 bg-gray-300 rounded" onClick={() => setClientDomainEditMode(false)}>キャンセル</button>
+          </div>
+        ) : (
+          <div className="flex gap-2 items-center">
+            <span>{clientDomain || <span className="text-gray-400">未設定</span>}</span>
+            <span className="text-xs text-gray-500">{clientDomainOmit ? '（省略する）' : '（省略しない）'}</span>
+            <button className="px-2 py-1 bg-gray-200 rounded" onClick={() => setClientDomainEditMode(true)}>編集</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

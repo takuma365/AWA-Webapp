@@ -6,6 +6,8 @@ class Site(models.Model):
     """サイト設定モデル"""
     name = models.CharField(_('サイト名'), max_length=255)
     url = models.CharField(_('URL'), max_length=100, unique=True, help_text=_('サイトのURL（英小文字）'), blank=True)
+    client_domain = models.CharField(_('クライアントサイトのドメイン'), max_length=255, blank=True, help_text=_('例: https://client.com'))
+    client_domain_omit = models.BooleanField(_('クライアントドメイン省略フラグ'), default=False, help_text=_('内部リンク時にドメインURLを省略するか'))
     active = models.BooleanField(_('有効'), default=True)
     created_at = models.DateTimeField(_('作成日時'), auto_now_add=True)
     updated_at = models.DateTimeField(_('更新日時'), auto_now=True)
@@ -91,9 +93,8 @@ class ConversionRule(models.Model):
         choices=SECTION_CHOICES,
         default='大見出し'
     )
-    tag = models.CharField(
+    tag = models.TextField(
         _('タグ'),
-        max_length=500,
         help_text=_('HTML形式で入力（例: <h1></h1>）'),
         default='<p></p>'
     )
@@ -121,6 +122,11 @@ class ConversionRule(models.Model):
         _('句点で閉じる'),
         default=False,
         help_text=_('句点（。）で段落を分割してタグを閉じる')
+    )
+    closing_tags = models.TextField(
+        _('セクションの終わりに付ける閉じタグ'),
+        blank=True,
+        help_text=_('大見出し・中見出しのセクション終了時に挿入する閉じタグ（例: </div></section>）')
     )
     active = models.BooleanField(_('有効'), default=True)
     created_at = models.DateTimeField(_('作成日時'), auto_now_add=True)

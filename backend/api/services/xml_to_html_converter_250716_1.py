@@ -16,6 +16,8 @@ SITE_CONFIGS = {
         },
         'h4_template': '<h4 id="{id}">{content}</h4>',#見出し2
         'heading_2_format': 'heading_{main_number}-{sub_number}',
+        'client_domain': '',  # 追加: 内部リンク判定用
+        'client_domain_omit': False,  # 追加: ドメイン省略フラグ
     },
 }
 
@@ -177,6 +179,12 @@ ID_PATTERNS = {
 
 # 句点分割フラグのグローバル設定
 SPLIT_ON_PERIOD_FLAGS = {}
+
+# ulフラグのグローバル設定
+UL_FLAGS = {}
+
+# olフラグのグローバル設定
+OL_FLAGS = {}
 
 def split_paragraph_on_period(content, section_name='テキスト', template='<p>{content}</p>'):
     """
@@ -477,6 +485,7 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # 見出し1の処理
             if pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') == '1':
+                print("【DEBUG】見出し1の処理に入りました")
                 heading_counters[1] += 1
                 heading_counters[2] = 0  # 見出し2のカウンターをリセット
                 heading_counters['link_counter'] = 0  # リンク項目カウンターもリセット
@@ -495,6 +504,7 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # TOC（目次）スタイルの処理
             elif pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') == '10':
+                print("【DEBUG】TOC（目次）スタイルの処理に入りました")
                 # TOCエントリを処理してリンクリストに変換
                 toc_entry = process_toc_entry(p, namespaces)
                 if toc_entry:
@@ -505,6 +515,7 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # 見出し2の処理
             elif pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') == '2':
+                print("【DEBUG】見出し2の処理に入りました")
                 # TOCリストが存在する場合は、先に出力
                 if hasattr(process_toc_entry, 'toc_list') and process_toc_entry.toc_list:
                     toc_html = generate_toc_links(process_toc_entry.toc_list)
@@ -536,35 +547,25 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # パラグラフ内の青色テキストとコメントのURLをリンクとして処理
             elif has_blue_text_and_url(p, comment_info, namespaces):
-                # 青色テキストを取得
+                print("【DEBUG】青色テキストとURLの処理に入りました")
                 blue_text_segments = find_blue_text_segments(p, namespaces)
-                
-                # 対応するコメント参照からURLを取得
                 comment_urls = get_urls_from_comments(p, comment_info, namespaces)
-                
                 if blue_text_segments and comment_urls:
                     # パラグラフ内のすべてのテキストを取得（青色部分も含む）
                     full_text = get_text_content(p, namespaces)
-                    
                     # 青色テキスト部分をリンクで置き換える
                     html_content = process_blue_text_links(full_text, blue_text_segments, comment_urls)
-                    # 句点分割を適用
-                    paragraph_html = split_paragraph_on_period(
-                        html_content, 
-                        section_name='テキスト', 
-                        template=HTML_TAGS['paragraph_template']
-                    )
+                    # aタグ外にテキストが出ないよう、html_content全体を<p>で囲むだけにする
+                    paragraph_html = f'<p>{html_content}</p>'
                     html_elements.append(paragraph_html)
                 else:
                     # 青色テキストかURLがない場合は通常のテキストとして処理
                     formatted_content = process_paragraph_runs(p, namespaces)
                     if formatted_content:
-                        # HTMLタグが含まれている場合は句点分割をスキップ
                         if '<' in formatted_content and '>' in formatted_content:
                             paragraph_html = HTML_TAGS['paragraph_template'].format(content=formatted_content)
                             html_elements.append(paragraph_html)
                         else:
-                            # 句点分割を適用
                             paragraph_html = split_paragraph_on_period(
                                 formatted_content, 
                                 section_name='テキスト', 
@@ -574,6 +575,8 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # 罫線内の青色テキストの場合は何もしない（見出し直後のリンクリストに任せる）
             elif is_paragraph_bordered(p, namespaces) and has_blue_text(p, namespaces):
+                print("【DEBUG】罫線内の青色テキストを検出")
+                print("【DEBUG】罫線内の青色テキストを検出")
                 # 青色テキストの内容を確認
                 text_content = get_text_content(p, namespaces)
                 if text_content and text_content.strip().startswith('・'):
@@ -636,8 +639,13 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             
             # マーカー、太字、罫線の処理
             else:
+                print("【DEBUG】通常のパラグラフ処理に入りました")
                 # 罫線の判定
                 is_bordered = is_paragraph_bordered(p, namespaces)
+                print("【DEBUG】罫線判定結果:", is_bordered)
+                if is_bordered:
+                    text_content = get_text_content(p, namespaces)
+                    print("【DEBUG】罫線内テキスト:", repr(text_content))
                 
                 # パラグラフ内のテキスト実行を処理し、マーカーや太字を適切に適用
                 formatted_content = process_paragraph_runs(p, namespaces)
@@ -673,6 +681,7 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
         del process_blue_text_links.numbered_link_list_items
     
     # 連続するdivの処理
+    print("【DEBUG】combine_consecutive_divs呼び出し直前のhtml_elements:", repr(html_elements))
     processed_html = combine_consecutive_divs(html_elements)
     
     # 最終的なHTMLの修正
@@ -806,61 +815,113 @@ def get_urls_from_comments(p, comment_info, namespaces):
     return urls
 
 def process_blue_text_links(full_text, blue_segments, urls):
-    """テキスト内の青色部分にURLをリンクとして適用"""
+    """
+    テキスト内の青色部分にURLをリンクとして適用
+    - ドメインを含む場合は内部リンクテンプレート
+    - ドメインを含まない場合は外部リンクテンプレート
+    - hrefのURLはclient_domain_omitフラグに従いドメインを省略
+    """
     if not blue_segments or not urls:
         return full_text
-    
-    # 複数のURLがある場合、青色セグメントとURLを対応付け
-    # 簡単のため、順番に対応付ける（一対一）
+
+    site_config = get_site_config()
+    client_domain = site_config.get('client_domain', '')
+    client_domain_omit = site_config.get('client_domain_omit', False)
+    internal_link_template = HTML_TAGS.get('link_template', '<a href="{url}"{target}>{text}</a>')
+    external_link_template = HTML_TAGS.get('external_link_template', '<a href="{url}" target="_blank" rel="noopener">{text}</a>')
+
     result = ""
     last_end = 0
-    
-    # 同じURLの連続したリンクをまとめるための処理
     current_url = None
     current_text = ""
-    
+
+    def is_internal(url):
+        # client_domainが空なら常に外部扱い
+        if not client_domain:
+            return False
+        # 完全一致またはスラッシュで区切られている場合のみ内部扱い
+        return url.startswith(client_domain)
+
+    def omit_domain(url):
+        if client_domain_omit and client_domain and url.startswith(client_domain):
+            path = url[len(client_domain):] or "/"
+            # 先頭が/でなければ付与
+            if not path.startswith("/"):
+                path = "/" + path
+            return path
+        return url
+
+    def render_link(template, href, text, target_attr):
+        # テンプレートをformat
+        html = template.format(url=href, target=target_attr, text=text, content=text)
+        html = re.sub(r'href=""', f'href="{href}"', html)
+        # aタグ部分のみ抽出
+        a_tag_match = re.search(r'<a [^>]*>.*?</a>', html, re.DOTALL)
+        if a_tag_match:
+            a_tag = a_tag_match.group(0)
+            # aタグの前後に何かタグ（例:span）があれば再ラップ
+            before = html[:a_tag_match.start()].strip()
+            after = html[a_tag_match.end():].strip()
+            if before or after:
+                # 前後にタグがあればそれでaタグを囲む（例: <span>...</span>）
+                # ただし、before/afterがタグであることを確認
+                # beforeが<span ...>なら、afterが</span>なら、その中にa_tagを入れる
+                before_tag_match = re.match(r'<([a-zA-Z0-9]+)( [^>]*)?>$', before)
+                after_tag_match = re.match(r'^</([a-zA-Z0-9]+)>$', after)
+                if before_tag_match and after_tag_match and before_tag_match.group(1) == after_tag_match.group(1):
+                    tagname = before_tag_match.group(1)
+                    attrs = before_tag_match.group(2) or ''
+                    return f'<{tagname}{attrs}>{a_tag}</{tagname}>'
+                # それ以外はaタグのみ返す
+            return a_tag
+        return html
+
     for i, segment in enumerate(blue_segments):
-        # セグメントとURL indexの対応付け
         url_index = min(i, len(urls) - 1)
         url = urls[url_index]
-        
-        # 青色部分の前のテキスト
         result += full_text[last_end:segment['start']]
-        
-        # 青色部分を取得
         blue_text = full_text[segment['start']:segment['end']]
-        
-        # @マークで始まるURLは@を除去
         if url.startswith('@'):
             url = url[1:].strip()
-        
-        # 同じURLが連続する場合はテキストを結合
+        # 内部/外部判定
+        if is_internal(url):
+            template = internal_link_template
+            href = omit_domain(url)
+            target_attr = ''
+        else:
+            template = external_link_template
+            href = url
+            target_attr = ' target="_blank" rel="noopener"'
+        # 連続URLまとめ
         if url == current_url:
             current_text += blue_text
         else:
-            # 前のURLのリンクを出力
             if current_url is not None:
-                if "cheer-job.com" not in current_url:
-                    result += f'<a href="{current_url}" target="_blank">{current_text}</a>'
+                # 直前のリンク出力
+                if is_internal(current_url):
+                    t = internal_link_template
+                    h = omit_domain(current_url)
+                    ta = ''
                 else:
-                    result += f'<a href="{current_url}">{current_text}</a>'
-            
-            # 新しいURLの処理を開始
+                    t = external_link_template
+                    h = current_url
+                    ta = ' target="_blank" rel="noopener"'
+                result += render_link(t, h, current_text, ta)
             current_url = url
             current_text = blue_text
-        
         last_end = segment['end']
-    
-    # 最後のURLのリンクを出力
+    # 最後のリンク
     if current_url is not None:
-        if "cheer-job.com" not in current_url:
-            result += f'<a href="{current_url}" target="_blank">{current_text}</a>'
+        if is_internal(current_url):
+            t = internal_link_template
+            h = omit_domain(current_url)
+            ta = ''
         else:
-            result += f'<a href="{current_url}">{current_text}</a>'
-    
-    # 残りのテキスト
+            t = external_link_template
+            h = current_url
+            ta = ' target="_blank" rel="noopener"'
+        result += render_link(t, h, current_text, ta)
     result += full_text[last_end:]
-    
     return result
 
 def collect_comments(xml_file_path, namespaces):
@@ -980,6 +1041,9 @@ def get_link_from_comments(p, comment_info, namespaces):
 
 def combine_consecutive_divs(html_elements):
     """連続するdivを一つにまとめ、内容を条件に応じて整形する（動的テンプレート対応）"""
+    print("【DEBUG】combine_consecutive_divs関数が呼び出されました")
+    print("【DEBUG】関数内のhtml_elements:", repr(html_elements))
+    
     result = ""
     div_pattern = re.compile(r'<div[^>]*>(.*?)</div>', re.DOTALL)
     
@@ -1031,12 +1095,12 @@ def combine_consecutive_divs(html_elements):
                     
                     if bullet_items:
                         # 箱内テキスト（中点）のテンプレートを取得
-                        list_template = HTML_TAGS.get('div_list_template', '<div><ul><li>テキスト</li></ul></div>')
+                        list_template = HTML_TAGS.get('div_list_template', '<div style="background:#ffffff;border:1px solid #cccccc;padding:5px 10px;"><ul><li>テキスト</li></ul></div>')
                         combined_content = process_bullet_list_items(bullet_items, list_template)
                         result += combined_content + '\n'
                     elif numbered_items:
                         # 箱内テキスト（番号）のテンプレートを取得
-                        ordered_template = HTML_TAGS.get('div_ordered_list_template', '<div><ol><li>テキスト</li></ol></div>')
+                        ordered_template = HTML_TAGS.get('div_ordered_list_template', '<div style="background:#ffffff;border:1px solid #cccccc;padding:5px 10px;"><ol><li>テキスト</li></ol></div>')
                         combined_content = process_numbered_list_items(numbered_items, ordered_template)
                         result += combined_content + '\n'
                     else:
@@ -1060,12 +1124,12 @@ def combine_consecutive_divs(html_elements):
                     result += current
                 elif content.strip().startswith('・'):
                     # 「・」で始まる場合は動的テンプレートを使用
-                    list_template = HTML_TAGS.get('div_list_template', '<div><ul><li>テキスト</li></ul></div>')
+                    list_template = HTML_TAGS.get('div_list_template', '<div style="background:#ffffff;border:1px solid #cccccc;padding:5px 10px;"><ul><li>テキスト</li></ul></div>')
                     formatted_content = process_bullet_list_items([content.strip()], list_template)
                     result += formatted_content + '\n'
                 elif re.match(r'^\d+\.', content.strip()):
                     # 「数字.」で始まる場合は番号付きリストのテンプレートを使用
-                    ordered_template = HTML_TAGS.get('div_ordered_list_template', '<div><ol><li>テキスト</li></ol></div>')
+                    ordered_template = HTML_TAGS.get('div_ordered_list_template', '<div style="background:#ffffff;border:1px solid #cccccc;padding:5px 10px;"><ol><li>テキスト</li></ol></div>')
                     formatted_content = process_numbered_list_items([content.strip()], ordered_template)
                     result += formatted_content + '\n'
                 else:
@@ -1082,52 +1146,57 @@ def combine_consecutive_divs(html_elements):
 
 def convert_table_to_html(tbl_element, namespaces):
     """XMLのテーブル要素をHTMLテーブルに変換する"""
-    html_table = '<table style="width: 100%;">\n\t<tbody>\n{content}\t</tbody>\n</table>\n'
-    # 行を処理
+    # テーブルテンプレートからスタイルを取得
+    table_template = HTML_TAGS.get('table_template', '<table style="width: 100%;">\n\t<tbody>\n{content}\t</tbody>\n</table>')
+
+    # tableタグが含まれない場合（ショートコード等）はそのまま返す
+    if '<table' not in table_template:
+        return '\n' + table_template + '\n'
+
+    # テーブルスタイルを抽出
+    table_style = ""
+    if table_template and '<table' in table_template:
+        import re
+        style_match = re.search(r'<table[^>]*style="([^"]*)"', table_template)
+        if style_match:
+            table_style = style_match.group(1)
+
+    # デフォルトスタイル（設定されていない場合）
+    if not table_style:
+        table_style = "width: 100%;"
+
+    # テーブル内容を構築
+    table_content = ""
     for tr in tbl_element.findall('.//w:tr', namespaces):
-        html_table += '\t\t<tr>\n'
-        
-        # セルを処理
+        table_content += '\t\t<tr>\n'
         for tc in tr.findall('.//w:tc', namespaces):
-            # セルの背景色を確認
             bg_color_style = get_cell_background_style(tc, namespaces)
-            
-            # セル内のパラグラフを処理してテキスト内容を取得
             paragraphs = tc.findall('.//w:p', namespaces)
             cell_content = ''
             is_bold = False
-            
             for i, p in enumerate(paragraphs):
-                # 太字の判定
                 bold_elements = p.findall('.//w:b', namespaces)
                 if bold_elements:
                     is_bold = True
-                
-                # パラグラフのテキスト内容を取得
                 formatted_content = process_paragraph_runs(p, namespaces)
                 if formatted_content:
                     cell_content += formatted_content
-                    # 最後のパラグラフ以外は改行を追加
                     if i < len(paragraphs) - 1:
                         cell_content += '<br />'
-            
-            # セルタイプ（thかtd）と内容を出力
             if is_bold:
                 style_attr = ' style="text-align: center;'
                 if bg_color_style:
                     style_attr += bg_color_style
                 style_attr += '"'
-                html_table += f'\t\t\t<th{style_attr}>{cell_content}</th>\n'
+                table_content += f'\t\t\t<th{style_attr}>{cell_content}</th>\n'
             else:
                 style_attr = ''
                 if bg_color_style:
                     style_attr = f' style="{bg_color_style}"'
-                html_table += f'\t\t\t<td{style_attr}>{cell_content}</td>\n'
-        
-        html_table += '\t\t</tr>\n'
-    
-    html_table += '\t</tbody>\n</table>\n'
-    return html_table
+                table_content += f'\t\t\t<td{style_attr}>{cell_content}</td>\n'
+        table_content += '\t\t</tr>\n'
+    result = f'<table style="{table_style}">\n\t<tbody>\n{table_content}\t</tbody>\n</table>\n'
+    return result
 
 def get_cell_background_style(tc, namespaces):
     """セルの背景色を取得し、スタイル文字列を返す"""
@@ -1163,19 +1232,52 @@ def get_cell_background_style(tc, namespaces):
 
 def is_paragraph_bordered(p, namespaces):
     """パラグラフが罫線を持つかを判定"""
+    print("【DEBUG】is_paragraph_bordered関数が呼び出されました")
+    
     # 直接パラグラフに罫線属性がある場合
     pBdr = p.find('.//w:pBdr', namespaces)
     if pBdr is not None:
+        print("【DEBUG】pBdr要素を検出: True")
         return True
     
     # 段落内のボックス属性を確認
     shd_elements = p.findall('.//w:shd[@w:fill]', namespaces)
+    print(f"【DEBUG】shd_elements数: {len(shd_elements)}")
     if shd_elements:
         for shd in shd_elements:
             fill_value = shd.get('{' + namespaces['w'] + '}fill')
+            print(f"【DEBUG】fill_value: {fill_value}")
             if fill_value and fill_value != 'auto':
+                print("【DEBUG】有効なfill_valueを検出: True")
                 return True
     
+    # その他の罫線判定方法を追加
+    # 背景色による判定
+    bg_elements = p.findall('.//w:shd', namespaces)
+    print(f"【DEBUG】bg_elements数: {len(bg_elements)}")
+    for bg in bg_elements:
+        fill = bg.get('{' + namespaces['w'] + '}fill')
+        color = bg.get('{' + namespaces['w'] + '}color')
+        print(f"【DEBUG】bg_fill: {fill}, bg_color: {color}")
+        if fill and fill != 'auto':
+            print("【DEBUG】背景色による罫線判定: True")
+            return True
+    
+    # 段落のスタイル属性を確認
+    pPr = p.find('.//w:pPr', namespaces)
+    if pPr is not None:
+        print("【DEBUG】pPr要素を検出")
+        # スタイル名を確認
+        pStyle = pPr.find('.//w:pStyle', namespaces)
+        if pStyle is not None:
+            style_val = pStyle.get('{' + namespaces['w'] + '}val')
+            print(f"【DEBUG】段落スタイル: {style_val}")
+            # 罫線に関連するスタイル名をチェック
+            if style_val and any(keyword in style_val.lower() for keyword in ['border', 'box', 'frame', 'outline']):
+                print("【DEBUG】罫線関連スタイルを検出: True")
+                return True
+    
+    print("【DEBUG】罫線判定結果: False")
     return False
 
 def process_paragraph_runs(p, namespaces):
@@ -1421,24 +1523,49 @@ def generate_link_list_from_items(items):
     if not items:
         return ""
     
-    # 動的テンプレートを使用（process_bullet_list_itemsと同じロジック）
-    template = HTML_TAGS.get('div_list_template', '<div><ul><li>テキスト</li></ul></div>')
+    # 箱内リンクテキスト（中点）のテンプレートを取得
+    template = HTML_TAGS.get('div_link_list_template', '<div class="solution" style="padding:10px 15px;border:1px solid #000000;"><li><span style="text-decoration: underline; color: #56a0d6;"><a href="#text1">{content}</a></span></li></div>')
     
     # アイテムから「・」を除去してクリーンにする
     clean_items = []
     for item in items:
-        # 既に<a>タグが含まれている場合はそのまま使用
+        # 既に<a>タグが含まれている場合は、<span>タグで囲む
         if '<a href=' in item:
-            clean_items.append(item)
+            # テンプレートから<span>タグの情報を抽出
+            span_match = re.search(r'<span[^>]*style="[^"]*"[^>]*>', template)
+            if span_match:
+                span_tag = span_match.group(0)
+                # <a>タグを<span>タグで囲む
+                wrapped_item = f'<li>{span_tag}{item}</span></li>'
+                clean_items.append(wrapped_item)
+            else:
+                # <span>タグが見つからない場合は通常の処理
+                clean_items.append(f'<li>{item}</li>')
         else:
             # 「・」で始まる場合は除去
             clean_item = item.strip()
             if clean_item.startswith('・'):
                 clean_item = clean_item[1:].strip()
-            clean_items.append(clean_item)
+            clean_items.append(f'<li>{clean_item}</li>')
     
-    # process_bullet_list_itemsを使用して動的テンプレートを処理
-    return process_bullet_list_items(clean_items, template)
+    # ulフラグをチェックしてulタグを追加するかどうかを判定
+    ul_flag_enabled = UL_FLAGS.get('箱内リンクテキスト（中点）', False)
+    if ul_flag_enabled:
+        li_content = '\n'.join(clean_items)
+        li_content = f'<ul>\n{li_content}\n</ul>'
+    else:
+        li_content = '\n'.join(clean_items)
+    
+    # テンプレートから外側のdiv構造を抽出
+    div_match = re.search(r'<div[^>]*style="[^"]*"[^>]*>', template)
+    if div_match:
+        div_start = div_match.group(0)
+        # 外側のdiv構造を構築
+        result = f"{div_start}\n{li_content}\n</div>"
+        return result
+    else:
+        # divタグが見つからない場合は通常の処理
+        return f"<div>\n{li_content}\n</div>"
 
 def test_tag_parsing():
     """タグ解析のテスト関数"""
@@ -1580,8 +1707,16 @@ def configure_from_json_data(json_data):
     # サイト基本情報の取得
     site_name = json_data.get('name', 'Unknown Site')
     site_url = json_data.get('url', 'unknown')
+    client_domain = json_data.get('client_domain', '')
+    client_domain_omit = json_data.get('client_domain_omit', False)
     
     print(f"[INFO] サイト設定を構築中: {site_name} ({site_url})")
+    print(f"[INFO] クライアントドメイン: {client_domain}")
+    print(f"[INFO] クライアントドメイン省略フラグ: {client_domain_omit}")
+    
+    # client_domain, client_domain_omitを反映
+    SITE_CONFIGS['webapp_custom']['client_domain'] = client_domain
+    SITE_CONFIGS['webapp_custom']['client_domain_omit'] = client_domain_omit
     
     # ルールの取得（フロントエンドとバックエンドの両方の形式に対応）
     rules = []
@@ -1614,6 +1749,7 @@ def configure_from_json_data(json_data):
     # ルールから見出し設定を抽出
     heading_1_rule = None
     heading_2_rule = None
+    table_rule = None
     
     for rule in rules:
         if not rule.get('active', False):
@@ -1624,6 +1760,8 @@ def configure_from_json_data(json_data):
             heading_1_rule = rule
         elif section == '中見出し':
             heading_2_rule = rule
+        elif section == '表':
+            table_rule = rule
     
     # 見出し1の設定
     if heading_1_rule:
@@ -1720,6 +1858,17 @@ def configure_from_json_data(json_data):
             ID_PATTERNS['link_item_format'] = 'heading-{main_number}-{sub_number}'
             print(f"[DEBUG] リンク項目IDフォーマット設定: デフォルト")
     
+    # テーブルの設定
+    if table_rule:
+        tag_string = table_rule.get('tag', '')
+        print(f"[DEBUG] テーブル設定:")
+        print(f"  元のタグ: {tag_string}")
+        
+        # テーブルテンプレートを設定
+        if tag_string:
+            HTML_TAGS['table_template'] = tag_string
+            print(f"[DEBUG] テーブルテンプレート設定: {tag_string}")
+    
     # その他のルールからHTML_TAGSを更新
     section_mapping = {
         'テキスト': 'paragraph_template',
@@ -1734,9 +1883,11 @@ def configure_from_json_data(json_data):
         '箱内リンクテキスト（中点）': 'div_link_list_template',
     }
     
-    # 句点分割フラグをリセット
-    global SPLIT_ON_PERIOD_FLAGS
+    # 句点分割フラグとulフラグをリセット
+    global SPLIT_ON_PERIOD_FLAGS, UL_FLAGS, OL_FLAGS
     SPLIT_ON_PERIOD_FLAGS = {}
+    UL_FLAGS = {}
+    OL_FLAGS = {}
     
     for rule in rules:
         if not rule.get('active', False):
@@ -1745,11 +1896,23 @@ def configure_from_json_data(json_data):
         section = rule.get('section', '')
         tag = rule.get('tag', '')
         split_on_period = rule.get('split_on_period', False)
+        ul_flag = rule.get('ul_flag', False)  # ulフラグを取得
+        ol_flag = rule.get('ol_flag', False)  # olフラグを取得
         
         # 句点分割フラグを設定
         if split_on_period:
             SPLIT_ON_PERIOD_FLAGS[section] = True
             print(f"[DEBUG] 句点分割フラグ設定: サイト={CURRENT_SITE}, セクション={section} = True")
+        
+        # ulフラグを設定（テンプレートにulタグが含まれている場合は自動的にON）
+        if ul_flag or (tag and '<ul>' in tag):
+            UL_FLAGS[section] = True
+            print(f"[DEBUG] ulフラグ設定: サイト={CURRENT_SITE}, セクション={section} = True")
+        
+        # olフラグを設定（テンプレートにolタグが含まれている場合は自動的にON）
+        if ol_flag or (tag and '<ol>' in tag):
+            OL_FLAGS[section] = True
+            print(f"[DEBUG] olフラグ設定: サイト={CURRENT_SITE}, セクション={section} = True")
         
         if section in section_mapping:
             # tagの中の「テキスト」を{content}に置換
@@ -1780,13 +1943,20 @@ def configure_from_json_data(json_data):
             elif section == '箱内テキスト（番号）':
                 processed_tag = processed_tag.replace('\\n', '\n')
             
+            # 内部リンクと外部リンクの場合もpタグを除去（パラグラフ内で使用されるため）
+            elif section in ['内部リンク', '外部リンク']:
+                # <p>...</p> で囲まれている場合は除去
+                processed_tag = re.sub(r'^<p[^>]*>([\s\S]*)</p>$', r'\1', processed_tag.strip())
+                # 複数行やインデントにも対応
+                processed_tag = processed_tag.strip()
+            
             HTML_TAGS[section_mapping[section]] = processed_tag
             print(f"[DEBUG] {section} → {section_mapping[section]}: {processed_tag}")
+    # ルールループの最後にUL_FLAGSの内容を出力
+    print(f"[DEBUG] UL_FLAGS: {UL_FLAGS}")
     
     # 現在のサイトをwebapp_customに設定
     CURRENT_SITE = 'webapp_custom'
-    
-    print(f"[INFO] サイト設定構築完了: {site_name}")
 
 def generate_heading_id_advanced(level, main_number, sub_number=None, single_counter=None):
     """
@@ -1929,6 +2099,8 @@ def process_bullet_list_items(items, list_template):
     Returns:
         str: 適切なHTMLリスト構造
     """
+    print("【DEBUG】process_bullet_list_items関数が呼び出されました")
+    
     if not items or not list_template:
         return ""
 
@@ -1938,34 +2110,69 @@ def process_bullet_list_items(items, list_template):
     print(f"[DEBUG] list_template: {list_template}")
 
     import re
-    # すべてのitemsを1つのテキストにまとめる
-    text = "\n".join(items)
-    # 改行で分割
-    split_items = re.split(r'\r\n|\r|\n', text)
-    # liタグで囲むのは先頭に「・」がある行のみ
+    
+    # 罫線内のテキストを処理
     li_items = []
-    for item in split_items:
-        s = item.strip()
-        if not s:
+    for item in items:
+        item = item.strip()
+        if not item:
             continue
-        if s.startswith('・'):
-            li_items.append(f'<li>{s.lstrip("・　 ").strip()}</li>')
+            
+        # 既にliタグが付いている場合はそのまま使用
+        if item.startswith('<li>') and item.endswith('</li>'):
+            li_items.append(item)
+        # 「・」で始まる場合は中点を除去してliタグで囲む
+        elif item.startswith('・'):
+            # 中点を除去してテキストを取得
+            clean_text = item.lstrip("・　 ").strip()
+            li_items.append(f'<li>{clean_text}</li>')
         else:
-            li_items.append(s)
+            # 「・」で始まらない場合はそのまま追加
+            li_items.append(item)
 
     print(f"[DEBUG] li_items: {li_items}")
 
-    # list_templateの{content}部分に実際のliタグを挿入
-    if '{content}' in list_template:
-        list_content = '\n'.join(li_items)
-        result = list_template.replace('{content}', list_content)
-        print(f"[DEBUG] 結果: {result}")
-        return result
+    # list_templateから罫線のdivタグを抽出
+    div_start_match = re.search(r'<div[^>]*style="[^"]*background:#ffffff;border:1px solid #cccccc;padding:5px 10px;"[^>]*>', list_template)
+    if div_start_match:
+        div_start = div_start_match.group(0)
+        # 罫線のdivタグの開始部分を取得
+        outer_start = list_template.split(div_start)[0]
+        # 罫線のdivタグの終了部分を取得
+        outer_end = '</div>'
+        
+        # ulフラグをチェックしてulタグを追加するかどうかを判定
+        ul_flag_enabled = UL_FLAGS.get('箱内テキスト（中点）', False)
+        ol_flag_enabled = OL_FLAGS.get('箱内テキスト（中点）', False)
+        
+        if li_items:
+            if ul_flag_enabled:
+                # ulフラグがONの場合はli_itemsの前後にulタグを挿入
+                li_content = '\n'.join(li_items)
+                li_content = f'<ul>\n{li_content}\n</ul>'
+                result = f"{outer_start}{div_start}\n{li_content}\n{outer_end}"
+            elif ol_flag_enabled:
+                ol_content = '\n'.join(li_items)
+                result = f"{outer_start}{div_start}\n<ol>\n{ol_content}\n</ol>\n{outer_end}"
+            else:
+                li_content = '\n'.join(li_items)
+                result = f"{outer_start}{div_start}\n{li_content}\n{outer_end}"
+        else:
+            result = f"{outer_start}{div_start}\n{outer_end}"
     else:
-        # {content}がない場合はliタグをそのまま並べる
-        result = '\n'.join(li_items)
-        print(f"[DEBUG] 結果: {result}")
-        return result
+        # 罫線のdivタグが見つからない場合は従来の処理
+        if '{content}' in list_template:
+            list_content = '\n'.join(li_items)
+            # ulフラグがONならulで囲む
+            ul_flag_enabled = UL_FLAGS.get('箱内テキスト（中点）', False)
+            if ul_flag_enabled:
+                list_content = f'<ul>\n{list_content}\n</ul>'
+            result = list_template.replace('{content}', list_content)
+        else:
+            result = '\n'.join(li_items)
+
+    print(f"[DEBUG] 結果: {result}")
+    return result
 
 def process_numbered_list_items(items, list_template):
     """
@@ -1985,11 +2192,15 @@ def process_numbered_list_items(items, list_template):
     clean_items = []
     for item in items:
         clean_item = item.strip()
-        # 数字.パターンを除去（例：「1.テキスト」→「テキスト」）
-        match = re.match(r'^\d+\.\s*(.*)', clean_item)
-        if match:
-            clean_item = match.group(1)
-        clean_items.append(clean_item)
+        # 既にliタグが付いている場合はそのまま使用
+        if clean_item.startswith('<li>') and clean_item.endswith('</li>'):
+            clean_items.append(clean_item)
+        else:
+            # 数字.パターンを除去（例：「1.テキスト」→「テキスト」）
+            match = re.match(r'^\d+\.\s*(.*)', clean_item)
+            if match:
+                clean_item = match.group(1)
+            clean_items.append(clean_item)
     
     # テンプレートの解析
     # 「{content}」（JSONから変換済み）または「テキスト」を含む場合はリスト項目として扱う
@@ -2018,8 +2229,11 @@ def process_numbered_list_items(items, list_template):
                     # リスト項目を生成
                     list_content = ""
                     for clean_item in clean_items:
+                        # 既にliタグが付いている場合はそのまま使用
+                        if clean_item.startswith('<li>') and clean_item.endswith('</li>'):
+                            formatted_li = clean_item
                         # 既に<a>タグが含まれている場合は、直接<li>で囲む
-                        if '<a href=' in clean_item:
+                        elif '<a href=' in clean_item:
                             formatted_li = f'<li>{clean_item}</li>'
                         elif '{content}' in li_content:
                             formatted_li = f'<li>{li_content.replace("{content}", clean_item)}</li>'
@@ -2059,13 +2273,29 @@ def process_numbered_list_items(items, list_template):
             # リスト項目を生成
             list_content = ""
             for clean_item in clean_items:
+                # 既にliタグが付いている場合はそのまま使用
+                if clean_item.startswith('<li>') and clean_item.endswith('</li>'):
+                    list_content += "\t" + clean_item + "\n"
                 # 既に<a>タグが含まれている場合は、直接<li>で囲む
-                if '<a href=' in clean_item:
+                elif '<a href=' in clean_item:
                     list_content += "\t" + f'<li>{clean_item}</li>' + "\n"
                 else:
                     list_content += "\t" + li_template.format(content=clean_item) + "\n"
             
-            result = f"{outer_start}{ol_start}\n{list_content}</ol>{outer_end}"
+            # ulフラグをチェックしてulタグを追加するかどうかを判定
+            ul_flag_enabled = UL_FLAGS.get('箱内テキスト（番号）', False)
+            ol_flag_enabled = OL_FLAGS.get('箱内テキスト（番号）', False)
+            
+            if ol_flag_enabled:
+                # olフラグがONの場合はolタグを使用
+                result = f"{outer_start}{ol_start}\n{list_content}</ol>{outer_end}"
+            elif ul_flag_enabled:
+                # ulフラグがONの場合はulタグを使用
+                result = f"{outer_start}<ul>\n{list_content}</ul>{outer_end}"
+            else:
+                # フラグがOFFの場合はliタグをそのまま配置
+                result = f"{outer_start}{list_content}{outer_end}"
+            
             return result
         
         # span形式の場合（サイト１のような形式）
@@ -2179,25 +2409,44 @@ def generate_numbered_link_list_from_items(items):
     if not items:
         return ""
     
-    # 動的テンプレートを使用（process_numbered_list_itemsと同じロジック）
-    template = HTML_TAGS.get('div_ordered_list_template', '<div><ol><li>テキスト</li></ol></div>')
+    # 箱内リンクテキスト（番号）のテンプレートを取得
+    template = HTML_TAGS.get('div_link_list_template', '<div class="solution" style="padding:10px 15px;border:1px solid #000000;"><li><span style="text-decoration: underline; color: #56a0d6;"><a href="#text1">{content}</a></span></li></div>')
     
     # アイテムから「数字.」を除去してクリーンにする（既にクリーンな状態だが念のため）
     clean_items = []
     for item in items:
-        # 既に<a>タグが含まれている場合はそのまま使用
+        # 既に<a>タグが含まれている場合は、<span>タグで囲む
         if '<a href=' in item:
-            clean_items.append(item)
+            # テンプレートから<span>タグの情報を抽出
+            span_match = re.search(r'<span[^>]*style="[^"]*"[^>]*>', template)
+            if span_match:
+                span_tag = span_match.group(0)
+                # <a>タグを<span>タグで囲む
+                wrapped_item = f'<li>{span_tag}{item}</span></li>'
+                clean_items.append(wrapped_item)
+            else:
+                # <span>タグが見つからない場合は通常の処理
+                clean_items.append(f'<li>{item}</li>')
         else:
             # 「数字.」で始まる場合は除去
             clean_item = item.strip()
             match = re.match(r'^\d+\.\s*(.*)', clean_item)
             if match:
                 clean_item = match.group(1)
-            clean_items.append(clean_item)
+            clean_items.append(f'<li>{clean_item}</li>')
     
-    # process_numbered_list_itemsを使用して動的テンプレートを処理
-    return process_numbered_list_items(clean_items, template)
+    # テンプレートから外側のdiv構造を抽出
+    div_match = re.search(r'<div[^>]*style="[^"]*"[^>]*>', template)
+    if div_match:
+        div_start = div_match.group(0)
+        # 外側のdiv構造を構築
+        li_content = '\n'.join(clean_items)
+        result = f"{div_start}\n{li_content}\n</div>"
+        return result
+    else:
+        # divタグが見つからない場合は通常の処理
+        li_content = '\n'.join(clean_items)
+        return f"<div>\n{li_content}\n</div>"
 
 def load_json_config_from_files(config_files=None):
     """
@@ -2353,6 +2602,7 @@ if __name__ == "__main__":
         parse_xml_to_html(input_file, output_file, json_config)
     else:
         print(f"ファイルが見つかりません: {input_file}")
+    print("テスト")
 
 """
 === Webアプリ連携システムの使用方法 ===
@@ -2439,4 +2689,5 @@ if __name__ == "__main__":
        after_string=''
    )
    ```
+      チアジョブ・ナースステップ・ソニー適用
 """ 

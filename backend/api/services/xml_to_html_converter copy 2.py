@@ -28,39 +28,6 @@ CURRENT_SITE = 'webapp_custom'  # Webアプリ連携用設定のみ使用
 def get_site_config():
     return SITE_CONFIGS[CURRENT_SITE]
 
-def get_closing_tags_for_section(section_name):
-    """
-    指定されたセクションの閉じタグを取得する
-    
-    Args:
-        section_name (str): セクション名（'大見出し' または '中見出し'）
-        
-    Returns:
-        str: 閉じタグ文字列、設定されていない場合は空文字列
-    """
-    # グローバル変数からルール情報を取得
-    global RULES_DATA
-    
-    if not hasattr(get_closing_tags_for_section, 'rules_cache'):
-        get_closing_tags_for_section.rules_cache = {}
-    
-    # キャッシュから取得
-    if section_name in get_closing_tags_for_section.rules_cache:
-        return get_closing_tags_for_section.rules_cache[section_name]
-    
-    # ルールデータから該当するセクションの閉じタグを取得
-    closing_tags = ""
-    if RULES_DATA:
-        for rule in RULES_DATA:
-            if rule.get('section') == section_name:
-                closing_tags = rule.get('closing_tags', '')
-                break
-    
-    # キャッシュに保存
-    get_closing_tags_for_section.rules_cache[section_name] = closing_tags
-    
-    return closing_tags
-
 def parse_html_tag_and_extract_id_pattern(tag_string):
     """
     HTMLタグを解析してid内の数字を変数化し、テンプレート化する
@@ -479,14 +446,6 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             # 見出し1の処理
             if pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') == '1':
                 print("【DEBUG】見出し1の処理に入りました")
-                
-                # 前の見出し1のセクションを閉じる（2回目以降の場合）
-                if heading_counters[1] > 0:
-                    closing_tags = get_closing_tags_for_section('大見出し')
-                    if closing_tags:
-                        html_elements.append(closing_tags)
-                        print(f"【DEBUG】大見出しセクションを閉じました: {closing_tags}")
-                
                 heading_counters[1] += 1
                 heading_counters[2] = 0  # 見出し2のカウンターをリセット
                 heading_counters['link_counter'] = 0  # リンク項目カウンターもリセット
@@ -525,13 +484,6 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
                     del process_toc_entry.toc_list
                     
                 if heading_counters[1] > 0:  # 見出し1が存在する場合のみ
-                    # 前の中見出しのセクションを閉じる（2回目以降の場合）
-                    if heading_counters[2] > 0:
-                        closing_tags = get_closing_tags_for_section('中見出し')
-                        if closing_tags:
-                            html_elements.append(closing_tags)
-                            print(f"【DEBUG】中見出しセクションを閉じました: {closing_tags}")
-                    
                     site_config = get_site_config()
                     
                     # 単一数字パターンかどうかをチェック
@@ -688,21 +640,6 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
         html_elements.append(numbered_list_html)
         del process_blue_text_links.numbered_link_list_items
     
-    # ドキュメントの最後に残ったセクションを閉じる
-    if heading_counters[2] > 0:
-        # 最後の中見出しセクションを閉じる
-        closing_tags = get_closing_tags_for_section('中見出し')
-        if closing_tags:
-            html_elements.append(closing_tags)
-            print(f"【DEBUG】最後の中見出しセクションを閉じました: {closing_tags}")
-    
-    if heading_counters[1] > 0:
-        # 最後の大見出しセクションを閉じる
-        closing_tags = get_closing_tags_for_section('大見出し')
-        if closing_tags:
-            html_elements.append(closing_tags)
-            print(f"【DEBUG】最後の大見出しセクションを閉じました: {closing_tags}")
-    
     # 連続するdivの処理
     print("【DEBUG】combine_consecutive_divs呼び出し直前のhtml_elements:", repr(html_elements))
     processed_html = combine_consecutive_divs(html_elements)
@@ -714,11 +651,6 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
     print("=== split_p_tags_on_period を呼び出します ===")
     processed_html = split_p_tags_on_period(processed_html)
     print("=== split_p_tags_on_period が完了しました ===")
-    
-    # 空白テキストを削除する処理
-    print("=== remove_empty_text_tags を呼び出します ===")
-    processed_html = remove_empty_text_tags(processed_html)
-    print("=== remove_empty_text_tags が完了しました ===")
     
     # HTML出力に結合（文末のHTMLタグを削除）
     html_output += processed_html
@@ -1195,22 +1127,6 @@ def convert_table_to_html(tbl_element, namespaces):
     if not table_style:
         table_style = "width: 100%;"
 
-    # thテンプレートからスタイルを抽出
-    th_style = ""
-    if table_cell_th_template and '<th' in table_cell_th_template:
-        import re
-        th_style_match = re.search(r'<th[^>]*style="([^"]*)"', table_cell_th_template)
-        if th_style_match:
-            th_style = th_style_match.group(1)
-
-    # tdテンプレートからスタイルを抽出
-    td_style = ""
-    if table_cell_td_template and '<td' in table_cell_td_template:
-        import re
-        td_style_match = re.search(r'<td[^>]*style="([^"]*)"', table_cell_td_template)
-        if td_style_match:
-            td_style = td_style_match.group(1)
-
     # テーブル内容を構築
     table_content = ""
     for tr in tbl_element.findall('.//w:tr', namespaces):
@@ -1230,29 +1146,14 @@ def convert_table_to_html(tbl_element, namespaces):
                     if i < len(paragraphs) - 1:
                         cell_content += '<br />'
             if is_bold:
-                # thテンプレートのスタイルを適用
-                style_attr = ''
-                if th_style:
-                    style_attr = f' style="{th_style}'
-                    if bg_color_style:
-                        style_attr += '; ' + bg_color_style
-                    style_attr += '"'
-                else:
-                    # デフォルトのthスタイル
-                    style_attr = ' style="text-align: center;'
-                    if bg_color_style:
-                        style_attr += bg_color_style
-                    style_attr += '"'
+                style_attr = ' style="text-align: center;'
+                if bg_color_style:
+                    style_attr += bg_color_style
+                style_attr += '"'
                 row_content += f'<th{style_attr}>{cell_content}</th>'
             else:
-                # tdテンプレートのスタイルを適用
                 style_attr = ''
-                if td_style:
-                    style_attr = f' style="{td_style}'
-                    if bg_color_style:
-                        style_attr += '; ' + bg_color_style
-                    style_attr += '"'
-                elif bg_color_style:
+                if bg_color_style:
                     style_attr = f' style="{bg_color_style}"'
                 row_content += f'<td{style_attr}>{cell_content}</td>'
         table_content += f'<tr>{row_content}</tr>'
@@ -1521,29 +1422,6 @@ def fix_consecutive_divs(html_content):
     
     return html_content
 
-
-def remove_empty_text_tags(html_content):
-    """
-    空白で終わるテキストタグを削除する
-    
-    Args:
-        html_content (str): HTML文字列
-        
-    Returns:
-        str: 空白テキストが削除されたHTML文字列
-    """
-    # 空白で終わるpタグを削除するパターン
-    # 全角空白（　）または半角空白のみを含むpタグを検出
-    empty_p_pattern = re.compile(r'<p[^>]*>\s*[　\s]*</p>', re.MULTILINE)
-    
-    # 空白で終わるpタグを削除
-    html_content = empty_p_pattern.sub('', html_content)
-    
-    # 連続する改行を整理
-    html_content = re.sub(r'\n\s*\n\s*\n', '\n\n', html_content)
-    
-    return html_content
-
 def process_toc_entry(p, namespaces):
     """TOCエントリを処理してリンク情報を抽出"""
     # ハイパーリンクのアンカーを取得
@@ -1788,10 +1666,6 @@ def configure_from_json_data(json_data):
     """
     global CURRENT_SITE, HTML_TAGS, STYLES, ID_PATTERNS
     
-    # ルールデータをグローバルに保存（閉じタグ取得用）
-    global RULES_DATA
-    RULES_DATA = []
-    
     # サイト基本情報の取得
     site_name = json_data.get('name', 'Unknown Site')
     site_url = json_data.get('url', 'unknown')
@@ -1850,9 +1724,6 @@ def configure_from_json_data(json_data):
             heading_2_rule = rule
         elif section == '表':
             table_rule = rule
-        
-        # ルールデータを保存（閉じタグ取得用）
-        RULES_DATA.append(rule)
     
     # 見出し1の設定
     if heading_1_rule:

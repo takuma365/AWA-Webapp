@@ -4,16 +4,17 @@ import React, { useState } from 'react';
 interface TabModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (name: string, id: string) => void;
+  onSubmit: (name: string, id: string, clientDomain: string) => void;
 }
 
 const TabModal: React.FC<TabModalProps> = ({ isOpen, onClose, onSubmit }) => {
   const [tabName, setTabName] = useState('');
   const [tabUrl, setTabUrl] = useState('');
+  const [clientDomain, setClientDomain] = useState('');
   const [error, setError] = useState('');
 
   const handleSubmit = () => {
-    console.log('[DEBUG] TabModal handleSubmit called with:', { tabName, tabUrl });
+    console.log('[DEBUG] TabModal handleSubmit called with:', { tabName, tabUrl, clientDomain });
     
     // 入力値の検証
     if (!tabName.trim()) {
@@ -28,11 +29,20 @@ const TabModal: React.FC<TabModalProps> = ({ isOpen, onClose, onSubmit }) => {
       setError('URLは英小文字、数字、ハイフンのみ使用できます。');
       return;
     }
+    if (!clientDomain.trim()) {
+      setError('クライアントサイトのドメインを入力してください。');
+      return;
+    }
+    if (!/^https?:\/\//.test(clientDomain.trim())) {
+      setError('ドメインは https:// から始めてください。');
+      return;
+    }
 
     console.log('[DEBUG] TabModal calling onSubmit with:', { tabName: tabName.trim(), tabUrl: tabUrl.trim().toLowerCase() });
-    onSubmit(tabName.trim(), tabUrl.trim().toLowerCase());
+    onSubmit(tabName.trim(), tabUrl.trim().toLowerCase(), clientDomain.trim());
     setTabName('');
     setTabUrl('');
+    setClientDomain('');
     setError('');
     onClose();
   };
@@ -40,6 +50,7 @@ const TabModal: React.FC<TabModalProps> = ({ isOpen, onClose, onSubmit }) => {
   const handleClose = () => {
     setTabName('');
     setTabUrl('');
+    setClientDomain('');
     setError('');
     onClose();
   };
@@ -72,6 +83,18 @@ const TabModal: React.FC<TabModalProps> = ({ isOpen, onClose, onSubmit }) => {
             onChange={(e) => setTabUrl(e.target.value.toLowerCase())}
             className="border p-2 w-full rounded"
             placeholder="例：ipe"
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            クライアントサイトのドメイン（例: https://example.com）
+          </label>
+          <input
+            type="text"
+            value={clientDomain}
+            onChange={(e) => setClientDomain(e.target.value)}
+            className="border p-2 w-full rounded"
+            placeholder="例：https://client.com"
           />
         </div>
         {error && (

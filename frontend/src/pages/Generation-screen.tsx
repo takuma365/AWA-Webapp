@@ -66,6 +66,7 @@ const GenerationScreen: React.FC = () => {
   const handleGenerateClick = async () => {
     const newData = {
       ...siteInfo,
+      client_domain: siteInfo?.client_domain || '',
       rules: rules,
       variable_values: variableValues
     };

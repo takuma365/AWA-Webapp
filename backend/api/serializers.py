@@ -7,7 +7,7 @@ class ConversionRuleSerializer(serializers.ModelSerializer):
         model = ConversionRule
         fields = [
             'id', 'setting', 'section', 'tag', 'word_style', 'bold', 'marker',
-            'prefix_text', 'suffix_text', 'split_on_period', 'active', 'created_at', 'updated_at'
+            'prefix_text', 'suffix_text', 'split_on_period', 'closing_tags', 'active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
         extra_kwargs = {
@@ -16,6 +16,7 @@ class ConversionRuleSerializer(serializers.ModelSerializer):
             'word_style': {'required': True},
             'prefix_text': {'required': False, 'allow_blank': True, 'allow_null': True},
             'suffix_text': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'closing_tags': {'required': False, 'allow_blank': True, 'allow_null': True},
             'bold': {'required': False},
             'marker': {'required': False},
             'split_on_period': {'required': False},
@@ -43,7 +44,7 @@ class SiteSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Site
-        fields = ['id', 'name', 'url', 'active', 'conversion_settings']
+        fields = ['id', 'name', 'url', 'client_domain', 'client_domain_omit', 'active', 'conversion_settings']
 
 
 class FileUploadSerializer(serializers.Serializer):
