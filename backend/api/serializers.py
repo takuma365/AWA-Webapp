@@ -6,13 +6,18 @@ class ConversionRuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConversionRule
         fields = [
-            'id', 'setting', 'section', 'tag', 'word_style', 'bold', 'marker',
+            'id', 'setting', 'section', 'tag', 'table_tag', 'tbody_tag', 'tr_tag', 'th_tag', 'td_tag', 'word_style', 'bold', 'marker',
             'prefix_text', 'suffix_text', 'split_on_period', 'closing_tags', 'active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
         extra_kwargs = {
             'setting': {'required': True},
-            'tag': {'required': True},
+            'tag': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'table_tag': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'tbody_tag': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'tr_tag': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'th_tag': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'td_tag': {'required': False, 'allow_blank': True, 'allow_null': True},
             'word_style': {'required': True},
             'prefix_text': {'required': False, 'allow_blank': True, 'allow_null': True},
             'suffix_text': {'required': False, 'allow_blank': True, 'allow_null': True},

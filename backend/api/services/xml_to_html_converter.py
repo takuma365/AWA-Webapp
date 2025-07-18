@@ -191,6 +191,13 @@ HTML_TAGS = {
     'table_cell_td_template': '\t\t\t<td{style}>{content}</td>\n',#テーブルセル（データ）
     'br_tag': '<br />',#改行
     'nbsp_paragraph': '<p>&nbsp;</p>',#空白パラグラフ
+    'th_tag': '<th{style}>{content}</th>',
+    'td_tag': '<td{style}>{content}</td>',
+    'table_tag': '<table>{content}</table>',
+    'tbody_tag': '<tbody>{content}</tbody>',
+    'tr_tag': '<tr>{content}</tr>',
+    'th_tag': '<th>{content}</th>',
+    'td_tag': '<td>{content}</td>',
 }
 
 # スタイルとクラスの定義
@@ -385,17 +392,15 @@ def is_blue_color(hex_color):
 def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
     """
     XMLをHTMLに変換する（JSONコンフィグ対応版）
-    
-    Args:
-        xml_file_path (str): 入力XMLファイルパス
-        output_file_path (str): 出力HTMLファイルパス  
-        json_config (dict): サイト設定のJSONデータ（オプション）
     """
     print("=== parse_xml_to_html 関数が開始されました ===")
-    
+    global rules
     # JSONコンフィグが提供された場合は動的設定を構築
     if json_config:
         configure_from_json_data(json_config)
+        # ルールをグローバル変数に格納
+        if 'conversion_settings' in json_config and json_config['conversion_settings']:
+            rules = json_config['conversion_settings'][0].get('rules', [])
     else:
         # デフォルト設定を使用
         set_heading1_from_webapp(
@@ -459,8 +464,14 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
                 link_list_html = generate_link_list_from_items(process_blue_text_links.link_list_items)
                 html_elements.append(link_list_html)
                 del process_blue_text_links.link_list_items
-                
-            html_elements.append(convert_table_to_html(element, namespaces))
+            # ルールから表の設定を取得
+            table_rule = None
+            if 'rules' in globals():
+                for rule in rules:
+                    if rule.get('active', False) and rule.get('section') == '表':
+                        table_rule = rule
+                        break
+            html_elements.append(convert_table_to_html(element, namespaces, table_rule))
             continue
         
         # パラグラフの処理
@@ -468,6 +479,13 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             p = element
             # スタイルを確認
             pStyle = p.find('.//w:pStyle', namespaces)
+            
+            # デバッグ: スタイル名とテキスト内容を出力
+            style_val = pStyle.get('{' + namespaces['w'] + '}val') if pStyle is not None else None
+            text_content_dbg = get_text_content(p, namespaces)
+            print("================ パラグラフデバッグ ================")
+            print(f"[DEBUG] パラグラフ: style={style_val}, text={repr(text_content_dbg)}")
+            print("==================================================")
             
             # 見出し処理の前にリンクリストを出力
             if pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') in ['1', '2']:
@@ -502,6 +520,28 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
                         headings.append((heading_id, text_content, 1))
                     else:
                         headings.append(('', text_content, 1))
+            
+            # 見出し3（小見出し）の処理
+            if pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') == '3':
+                print("【DEBUG】見出し3（小見出し）の処理に入りました")
+                # 大見出し・中見出しのカウンターが0なら初期化
+                if heading_counters[1] == 0:
+                    heading_counters[1] = 1
+                if heading_counters[2] == 0:
+                    heading_counters[2] = 1
+                heading_counters[3] += 1
+                text_content = get_text_content(p, namespaces)
+                if text_content:
+                    heading_id = generate_heading_id_advanced(4, heading_counters[1], heading_counters[2], None, heading_counters[3])
+                    heading_html_content = generate_heading_html_simple(4, heading_id, text_content, heading_counters[1], heading_counters[2], heading_counters[3])
+                    heading_html = f'{heading_html_content}\n'
+                    html_elements.append(heading_html)
+                    # headingsリストに追加
+                    if heading_id:
+                        headings.append((heading_id, text_content, 4))
+                    else:
+                        headings.append(('', text_content, 4))
+                continue
             
             # TOC（目次）スタイルの処理
             elif pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') == '10':
@@ -1171,135 +1211,63 @@ def combine_consecutive_divs(html_elements):
     
     return result
 
-def convert_table_to_html(tbl_element, namespaces):
-    """XMLのテーブル要素をHTMLテーブルに変換する"""
-    # テーブルテンプレートからスタイルを取得
-    table_template = HTML_TAGS.get('table_template', '<table style="width: 100%;">\n\t<tbody>\n{content}\t</tbody>\n</table>')
-    table_row_template = HTML_TAGS.get('table_row_template', '\t\t<tr>\n{content}\t\t</tr>\n')
-    table_cell_th_template = HTML_TAGS.get('table_cell_th_template', '\t\t\t<th{style}>{content}</th>\n')
-    table_cell_td_template = HTML_TAGS.get('table_cell_td_template', '\t\t\t<td{style}>{content}</td>\n')
+def convert_table_to_html(tbl_element, namespaces, table_rule=None):
+    """XMLのテーブル要素をHTMLテーブルに変換する（ルール対応版）"""
+    # デフォルトテンプレート
+    table_tag = HTML_TAGS.get('table_tag', '<table>{content}</table>')
+    tbody_tag = HTML_TAGS.get('tbody_tag', '<tbody>{content}</tbody>')
+    tr_tag = HTML_TAGS.get('tr_tag', '<tr>{content}</tr>')
+    th_tag = HTML_TAGS.get('th_tag', '<th>{content}</th>')
+    td_tag = HTML_TAGS.get('td_tag', '<td>{content}</td>')
 
-    # tableタグが含まれない場合（ショートコード等）はそのまま返す
-    if '<table' not in table_template:
-        return '\n' + table_template + '\n'
+    # ルールが渡されていれば上書き
+    if table_rule:
+        if table_rule.get('table_tag'):
+            table_tag = table_rule['table_tag']
+        if table_rule.get('tbody_tag'):
+            tbody_tag = table_rule['tbody_tag']
+        if table_rule.get('tr_tag'):
+            tr_tag = table_rule['tr_tag']
+        if table_rule.get('th_tag'):
+            th_tag = table_rule['th_tag']
+        if table_rule.get('td_tag'):
+            td_tag = table_rule['td_tag']
 
-    # テーブルスタイルを抽出
-    table_style = ""
-    if table_template and '<table' in table_template:
-        import re
-        style_match = re.search(r'<table[^>]*style="([^"]*)"', table_template)
-        if style_match:
-            table_style = style_match.group(1)
-
-    # デフォルトスタイル（設定されていない場合）
-    if not table_style:
-        table_style = "width: 100%;"
-
-    # thテンプレートからスタイルを抽出
-    th_style = ""
-    if table_cell_th_template and '<th' in table_cell_th_template:
-        import re
-        th_style_match = re.search(r'<th[^>]*style="([^"]*)"', table_cell_th_template)
-        if th_style_match:
-            th_style = th_style_match.group(1)
-
-    # tdテンプレートからスタイルを抽出
-    td_style = ""
-    if table_cell_td_template and '<td' in table_cell_td_template:
-        import re
-        td_style_match = re.search(r'<td[^>]*style="([^"]*)"', table_cell_td_template)
-        if td_style_match:
-            td_style = td_style_match.group(1)
-
-    # テーブル内容を構築
-    table_content = ""
-    for tr in tbl_element.findall('.//w:tr', namespaces):
+    trs = tbl_element.findall('.//w:tr', namespaces)
+    tbody_content = ""
+    for tr_idx, tr in enumerate(trs):
         row_content = ""
-        for tc in tr.findall('.//w:tc', namespaces):
-            bg_color_style = get_cell_background_style(tc, namespaces)
+        tcs = tr.findall('.//w:tc', namespaces)
+        for tc in tcs:
             paragraphs = tc.findall('.//w:p', namespaces)
             cell_content = ''
-            is_bold = False
             for i, p in enumerate(paragraphs):
-                bold_elements = p.findall('.//w:b', namespaces)
-                if bold_elements:
-                    is_bold = True
                 formatted_content = process_paragraph_runs(p, namespaces)
                 if formatted_content:
                     cell_content += formatted_content
                     if i < len(paragraphs) - 1:
                         cell_content += '<br />'
-            
-            # 太字の場合はth、そうでなければtdを使用
-            if is_bold:
-                # thテンプレートを使用
-                if table_cell_th_template and '{content}' in table_cell_th_template:
-                    # テンプレートに{content}プレースホルダーがある場合
-                    style_attr = ''
-                    if th_style:
-                        style_attr = f' style="{th_style}'
-                        if bg_color_style:
-                            style_attr += '; ' + bg_color_style
-                        style_attr += '"'
-                    else:
-                        # デフォルトのthスタイル
-                        style_attr = ' style="text-align: center;'
-                        if bg_color_style:
-                            style_attr += bg_color_style
-                        style_attr += '"'
-                    
-                    # テンプレートの{style}プレースホルダーを置換
-                    th_html = table_cell_th_template.replace('{style}', style_attr)
-                    # {content}プレースホルダーを実際の内容で置換
-                    th_html = th_html.replace('{content}', cell_content)
-                    row_content += th_html
-                else:
-                    # テンプレートがない場合は通常のthタグ
-                    style_attr = ''
-                    if th_style:
-                        style_attr = f' style="{th_style}'
-                        if bg_color_style:
-                            style_attr += '; ' + bg_color_style
-                        style_attr += '"'
-                    else:
-                        # デフォルトのthスタイル
-                        style_attr = ' style="text-align: center;'
-                        if bg_color_style:
-                            style_attr += bg_color_style
-                        style_attr += '"'
-                    row_content += f'<th{style_attr}>{cell_content}</th>'
+            # 1行目はth、それ以降はtd
+            if tr_idx == 0:
+                tag_html = th_tag.replace('{content}', cell_content)
+                row_content += tag_html
             else:
-                # tdテンプレートを使用
-                if table_cell_td_template and '{content}' in table_cell_td_template:
-                    # テンプレートに{content}プレースホルダーがある場合
-                    style_attr = ''
-                    if td_style:
-                        style_attr = f' style="{td_style}'
-                        if bg_color_style:
-                            style_attr += '; ' + bg_color_style
-                        style_attr += '"'
-                    elif bg_color_style:
-                        style_attr = f' style="{bg_color_style}"'
-                    
-                    # テンプレートの{style}プレースホルダーを置換
-                    td_html = table_cell_td_template.replace('{style}', style_attr)
-                    # {content}プレースホルダーを実際の内容で置換
-                    td_html = td_html.replace('{content}', cell_content)
-                    row_content += td_html
+                import re
+                if '<ul' in td_tag and '<li>{content}</li>' in td_tag:
+                    # 「・」で分割しliタグで囲む（「・」は除去しない）、li内の<br>は除去
+                    items = [f'・{item}' if not item.startswith('・') else item for item in re.split(r'・', cell_content) if item.strip()]
+                    items = [re.sub(r'<br ?/?>', '', item).strip() for item in items]
+                    li_html = ''.join(f'<li>{item}</li>' for item in items)
+                    cell_html = td_tag.replace('<li>{content}</li>', li_html)
+                    row_content += cell_html
                 else:
-                    # テンプレートがない場合は通常のtdタグ
-                    style_attr = ''
-                    if td_style:
-                        style_attr = f' style="{td_style}'
-                        if bg_color_style:
-                            style_attr += '; ' + bg_color_style
-                        style_attr += '"'
-                    elif bg_color_style:
-                        style_attr = f' style="{bg_color_style}"'
-                    row_content += f'<td{style_attr}>{cell_content}</td>'
-        table_content += f'<tr>{row_content}</tr>'
-    result = table_template.format(content=table_content)
-    return result
+                    tag_html = td_tag.replace('{content}', cell_content)
+                    row_content += tag_html
+        row_html = tr_tag.replace('{content}', row_content)
+        tbody_content += row_html
+    tbody_html = tbody_tag.replace('{content}', tbody_content)
+    table_html = table_tag.replace('{content}', tbody_html)
+    return table_html
 
 def get_cell_background_style(tc, namespaces):
     """セルの背景色を取得し、スタイル文字列を返す"""
@@ -2114,39 +2082,35 @@ def configure_from_json_data(json_data):
     # 現在のサイトをwebapp_customに設定
     CURRENT_SITE = 'webapp_custom'
 
-def generate_heading_id_advanced(level, main_number, sub_number=None, single_counter=None):
+def generate_heading_id_advanced(level, main_number, sub_number=None, single_counter=None, sub_sub_number=None):
     """
-    高度な見出しID生成（単一数字パターンに対応）
-    
+    高度な見出しID生成（小見出し対応）
     Args:
-        level (int): 見出しレベル（1または2）
+        level (int): 見出しレベル（1,2,4）
         main_number (int): 大見出し番号
-        sub_number (int): 小見出し番号（level2の場合のみ）
-        single_counter (int): 単一カウンター（単一数字パターンの場合）
-    
+        sub_number (int): 中見出し番号
+        single_counter (int): 単一カウンター
+        sub_sub_number (int): 小見出し番号
     Returns:
         str: 生成されたID
     """
     site_config = get_site_config()
-    
     if level == 1:
         format_str = site_config['heading_1']['id_format']
         if not format_str:
             return ""
         return format_str.format(number=main_number)
-        
     elif level == 2:
         format_str = site_config['heading_2_format']
         if not format_str:
             return ""
-            
-        # 単一数字パターンの場合
         if site_config.get('heading_2_single_counter', False):
             return format_str.format(number=single_counter if single_counter is not None else sub_number)
         else:
-            # 複数数字パターンの場合
             return format_str.format(main_number=main_number, sub_number=sub_number)
-    
+    elif level == 4:
+        # 小見出し: section{main_number}-{sub_number}-{sub_sub_number}
+        return f"section{main_number}-{sub_number}-{sub_sub_number}"
     return ""
 
 def test_json_config_parsing(json_data):
@@ -3042,71 +3006,60 @@ def replace_text_in_heading_structure(tag_string, new_text):
             # 最後のテキストが見つからない場合は、コンテンツ全体を置換
             return start_tag + new_text + end_tag
 
-def generate_heading_html_simple(level, heading_id, text_content, heading_number=None):
+def generate_heading_html_simple(level, heading_id, text_content, heading_number=None, sub_number=None, sub_sub_number=None):
     """
     シンプルな見出しHTML生成（元のタグ構造を保持）
     """
     site_config = get_site_config()
-    
     if level == 1:
         heading_config = site_config['heading_1']
         original_tag = heading_config.get('original_tag', '')
         before = heading_config['before']
         after = heading_config['after']
-        
         if original_tag:
-            # 元のタグの構造を保持してテキストを置換
             formatted_tag = replace_text_in_heading_structure(original_tag, text_content)
-            # IDを更新
             if heading_id:
                 if 'id=' in formatted_tag:
-                    # 既存のIDを置換
                     formatted_tag = re.sub(r'id\s*=\s*["\'][^"\']*["\']', f'id="{heading_id}"', formatted_tag)
                 else:
-                    # ID属性を追加
                     tag_name_match = re.match(r'<(\w+)', formatted_tag)
                     if tag_name_match:
                         tag_name = tag_name_match.group(1)
                         formatted_tag = formatted_tag.replace(f'<{tag_name}', f'<{tag_name} id="{heading_id}"')
         else:
-            # フォールバック: 通常のテンプレート処理
             template = heading_config['tag']
             if '{id}' in template and heading_id:
                 formatted_tag = template.format(id=heading_id, content=text_content)
             else:
                 formatted_tag = template.format(content=text_content)
-        
         return before + formatted_tag + after
-        
     elif level == 2:
         original_tag = site_config.get('heading_2_original_tag', '')
         before = site_config.get('heading_2_before', '')
         after = site_config.get('heading_2_after', '')
-        
         if original_tag:
-            # 元のタグの構造を保持してテキストを置換
             formatted_tag = replace_text_in_heading_structure(original_tag, text_content)
-            # IDを更新
             if heading_id:
                 if 'id=' in formatted_tag:
-                    # 既存のIDを置換
                     formatted_tag = re.sub(r'id\s*=\s*["\'][^"\']*["\']', f'id="{heading_id}"', formatted_tag)
                 else:
-                    # ID属性を追加
                     tag_name_match = re.match(r'<(\w+)', formatted_tag)
                     if tag_name_match:
                         tag_name = tag_name_match.group(1)
                         formatted_tag = formatted_tag.replace(f'<{tag_name}', f'<{tag_name} id="{heading_id}"')
         else:
-            # フォールバック: 通常のテンプレート処理
             template = site_config['h4_template']
             if '{id}' in template and heading_id:
                 formatted_tag = template.format(id=heading_id, content=text_content)
             else:
                 formatted_tag = template.format(content=text_content)
-            
         return before + formatted_tag + after
-    
+    elif level == 4:
+        # 小見出し用: 固定テンプレート
+        if heading_id:
+            return f'<h4 class="zm__text-body __basic" style="color: #2299e1;font-weight: 700;font-size: 1.1em;" id="{heading_id}">{text_content}</h4>'
+        else:
+            return f'<h4 class="zm__text-body __basic" style="color: #2299e1;font-weight: 700;font-size: 1.1em;">{text_content}</h4>'
     return text_content
 
 if __name__ == "__main__":

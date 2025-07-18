@@ -93,10 +93,30 @@ class ConversionRule(models.Model):
         choices=SECTION_CHOICES,
         default='大見出し'
     )
-    tag = models.TextField(
-        _('タグ'),
-        help_text=_('HTML形式で入力（例: <h1></h1>）'),
-        default='<p></p>'
+    table_tag = models.TextField(
+        _('tableタグ'),
+        blank=True,
+        help_text=_('テーブル全体のHTMLタグ（例: <table style="...">{content}</table>）')
+    )
+    tbody_tag = models.TextField(
+        _('tbodyタグ'),
+        blank=True,
+        help_text=_('tbodyのHTMLタグ（例: <tbody>{content}</tbody>）')
+    )
+    tr_tag = models.TextField(
+        _('trタグ'),
+        blank=True,
+        help_text=_('trのHTMLタグ（例: <tr>{content}</tr>）')
+    )
+    th_tag = models.TextField(
+        _('thタグ'),
+        blank=True,
+        help_text=_('thのHTMLタグ（例: <th style="...">{content}</th>）')
+    )
+    td_tag = models.TextField(
+        _('tdタグ'),
+        blank=True,
+        help_text=_('tdのHTMLタグ（例: <td style="...">{content}</td>）')
     )
     word_style = models.CharField(
         _('Wordにおけるスタイル'), 
@@ -131,12 +151,13 @@ class ConversionRule(models.Model):
     active = models.BooleanField(_('有効'), default=True)
     created_at = models.DateTimeField(_('作成日時'), auto_now_add=True)
     updated_at = models.DateTimeField(_('更新日時'), auto_now=True)
+    tag = models.TextField(_('タグ'), blank=True, help_text=_('HTMLタグ（例: <h2>{content}</h2> など）'))
     
     class Meta:
         verbose_name = _('変換ルール')
         verbose_name_plural = _('変換ルール')
         ordering = ['setting', 'section']
-        unique_together = [['setting', 'section']]  # 同じ設定内で同じセクションは1つまで
+        unique_together = [['setting', 'section']]
     
     def __str__(self):
         return f"{self.setting} - {self.section}"

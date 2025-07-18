@@ -1,3 +1,4 @@
+import React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import TabModal from '../components/TabModal';
@@ -10,13 +11,19 @@ type FieldErrors = {
 };
 type SectionFields = {
   tag: string;
-  wordStyle: string;
+  word_style: string;
   bold: string;
   extraStyle: string;
-  prefix: string;
-  suffix: string;
-  splitOnPeriod: string;
-  closingTags: string; // 追加: セクションの終わりに付ける閉じタグ
+  prefix_text: string;
+  suffix_text: string;
+  split_on_period: string;
+  closing_tags: string; // 追加: セクションの終わりに付ける閉じタグ
+  // 追加
+  table_tag?: string;
+  tbody_tag?: string;
+  tr_tag?: string;
+  th_tag?: string;
+  td_tag?: string;
 };
 
 const selfClosingTags = new Set([
@@ -185,14 +192,20 @@ const SettingsScreen = () => {
       const newFormData: Record<string, SectionFields> = {};
       rules.forEach((rule: any) => {
         newFormData[rule.section] = {
-          tag: rule.tag,
-          wordStyle: rule.word_style,
+          tag: rule.tag, // ←この行は表以外のみ
+          word_style: rule.word_style,
           bold: rule.bold ? 'true' : '',
           extraStyle: rule.marker ? 'marker' : '',
-          prefix: rule.prefix_text || '',
-          suffix: rule.suffix_text || '',
-          splitOnPeriod: rule.split_on_period ? 'true' : '',
-          closingTags: rule.closing_tags || '', // 追加: closingTagsの初期化
+          prefix_text: rule.prefix_text || '',
+          suffix_text: rule.suffix_text || '',
+          split_on_period: rule.split_on_period ? 'true' : '',
+          closing_tags: rule.closing_tags || '',
+          // 追加
+          table_tag: rule.table_tag || '',
+          tbody_tag: rule.tbody_tag || '',
+          tr_tag: rule.tr_tag || '',
+          th_tag: rule.th_tag || '',
+          td_tag: rule.td_tag || '',
         };
       });
       setFormData((prev) => ({ ...prev, [activeTabId]: newFormData }));
@@ -414,7 +427,7 @@ const SettingsScreen = () => {
     if (confirmAction === 'save') {
       // 保存前のバリデーションチェック
       const hasError = (sectionMap[activeTabId] || []).some(section => {
-        if (!formData[activeTabId][section].wordStyle) return true;
+        if (!formData[activeTabId][section].word_style) return true;
         if (errors[activeTabId]?.[section]?.tag) return true;
         return false;
       });
@@ -445,7 +458,7 @@ const SettingsScreen = () => {
     value: string
   ) => {
     let error = '';
-    if (key === 'wordStyle') {
+    if (key === 'word_style') {
       error = value ? '' : '未設定です';
     }
     if (key === 'tag') {
@@ -493,7 +506,7 @@ const SettingsScreen = () => {
     (sectionMap[activeTabId] || []).forEach(section => {
       if (section !== '文頭' && section !== '文末') {
         const data = formData[activeTabId][section];
-        if (!data.wordStyle) {
+        if (!data.word_style) {
           newErrors[section] = {
             ...(errors[activeTabId]?.[section] || {}),
             wordStyle: '未設定です',
@@ -568,14 +581,19 @@ const SettingsScreen = () => {
         const basePayload = {
           setting: settingId,
           section,
-          tag: data.tag || existing?.tag || '',
-          word_style: data.wordStyle || existing?.word_style || '',
+          tag: section === '表' ? '' : data.tag || existing?.tag || '',
+          table_tag: data.table_tag || existing?.table_tag || '',
+          tbody_tag: data.tbody_tag || existing?.tbody_tag || '',
+          tr_tag: data.tr_tag || existing?.tr_tag || '',
+          th_tag: data.th_tag || existing?.th_tag || '',
+          td_tag: data.td_tag || existing?.td_tag || '',
+          word_style: data.word_style || existing?.word_style || '', // ←wordStyle→word_style
           bold: data.bold === 'true',
           marker: data.extraStyle === 'marker',
-          prefix_text: data.prefix || existing?.prefix_text || '',
-          suffix_text: data.suffix || existing?.suffix_text || '',
-          split_on_period: data.splitOnPeriod === 'true',
-          closing_tags: data.closingTags || existing?.closing_tags || '', // 追加: closing_tagsの保存
+          prefix_text: data.prefix_text || existing?.prefix_text || '', // ←prefix→prefix_text
+          suffix_text: data.suffix_text || existing?.suffix_text || '', // ←suffix→suffix_text
+          split_on_period: data.split_on_period === 'true', // ←splitOnPeriod→split_on_period
+          closing_tags: data.closing_tags || existing?.closing_tags || '', // ←closingTags→closing_tags
           active: true,
         };
 
@@ -725,13 +743,13 @@ const SettingsScreen = () => {
             ? `「${targetTabName}」のタブを削除してもよろしいですか？`
             : confirmAction === 'delete-tab-data'
             ? `「${targetTabName}」とそのすべてのデータを削除してもよろしいですか？`
-            : `「${tabs.find(tab => tab.id === activeTabId)?.name}」の設定を保存してもよろしいですか？`
+            : `「${tabs.find((tab: Tab) => tab.id === activeTabId)?.name}」の設定を保存してもよろしいですか？`
         }
       />
       <div className="relative flex items-center border-t border-l border-r border-black bg-gray-300">
         <button onClick={scrollLeft} className="px-2">◀</button>
         <div ref={scrollRef} className="flex overflow-x-auto whitespace-nowrap flex-1">
-          {tabs.map((tab) => (
+          {tabs.map((tab: Tab) => (
             <button
               key={tab.id}
               onClick={() => navigate(`/settings/${tab.id}`)}
@@ -741,14 +759,13 @@ const SettingsScreen = () => {
             </button>
           ))}
           <button className="px-4 py-2 text-lg font-bold border-l border-black bg-white" onClick={() => {
-            console.log('[DEBUG] Tab add button clicked');
             setIsTabModalOpen(true);
           }}>＋</button>
         </div>
         <button onClick={scrollRight} className="px-2">▶</button>
       </div>
 
-      {sectionMap[activeTabId]?.map((title) => (
+      {sectionMap[activeTabId]?.map((title: string) => (
         <div key={title} className="border border-black border-t-0">
           <button className="w-full flex justify-between items-center px-4 py-2 bg-gray-100" onClick={() => toggleSection(title)}>
             <span>{title}</span>
@@ -757,30 +774,80 @@ const SettingsScreen = () => {
           {openSections[title] && (
             <div className="p-4 bg-gray-50">
               <form className="grid grid-cols-2 gap-4 text-sm">
-                <div className="col-span-2">
-                  <label className="block border-b-2 border-gray-500 mb-2 pb-4">
-                    タグ：
-                    <textarea
-                      className="w-full border p-1 mt-1 mb-2 font-mono"
-                      rows={10}
-                      value={formData[activeTabId]?.[title]?.tag || ''}
-                      onChange={(e) => handleChange(title, 'tag', e.target.value)}
-                      placeholder="例: <h1></h1>など"
-                      style={{ whiteSpace: 'pre', overflowWrap: 'normal', overflowX: 'auto' }}
-                    />
-                    {errors[activeTabId]?.[title]?.tag && (
-                      <p className="text-red-500 text-xs mb-2"> {errors[activeTabId][title].tag}</p>
-                    )}
-                  </label>
-                </div>
+                {title === '表' ? (
+                  <>
+                    <label className="block mb-2">tableタグ：
+                      <textarea
+                        className="w-full border p-1 mt-1 mb-2 font-mono"
+                        rows={2}
+                        value={formData[activeTabId]?.[title]?.table_tag || ''}
+                        onChange={(e) => handleChange(title, 'table_tag', e.target.value)}
+                        placeholder={'例: <table style="width:100%">{content}</table>'}
+                      />
+                    </label>
+                    <label className="block mb-2">tbodyタグ：
+                      <textarea
+                        className="w-full border p-1 mt-1 mb-2 font-mono"
+                        rows={2}
+                        value={formData[activeTabId]?.[title]?.tbody_tag || ''}
+                        onChange={(e) => handleChange(title, 'tbody_tag', e.target.value)}
+                        placeholder={'例: <tbody>{content}</tbody>'}
+                      />
+                    </label>
+                    <label className="block mb-2">trタグ：
+                      <textarea
+                        className="w-full border p-1 mt-1 mb-2 font-mono"
+                        rows={2}
+                        value={formData[activeTabId]?.[title]?.tr_tag || ''}
+                        onChange={(e) => handleChange(title, 'tr_tag', e.target.value)}
+                        placeholder={'例: <tr>{content}</tr>'}
+                      />
+                    </label>
+                    <label className="block mb-2">thタグ：
+                      <textarea
+                        className="w-full border p-1 mt-1 mb-2 font-mono"
+                        rows={2}
+                        value={formData[activeTabId]?.[title]?.th_tag || ''}
+                        onChange={(e) => handleChange(title, 'th_tag', e.target.value)}
+                        placeholder={'例: <th style="...">{content}</th>'}
+                      />
+                    </label>
+                    <label className="block mb-2">tdタグ：
+                      <textarea
+                        className="w-full border p-1 mt-1 mb-2 font-mono"
+                        rows={2}
+                        value={formData[activeTabId]?.[title]?.td_tag || ''}
+                        onChange={(e) => handleChange(title, 'td_tag', e.target.value)}
+                        placeholder={'例: <td style="...">{content}</td>'}
+                      />
+                    </label>
+                  </>
+                ) : (
+                  title !== '表' && (
+                    <label className="block border-b-2 border-gray-500 mb-2 pb-4">
+                      タグ：
+                      <textarea
+                        className="w-full border p-1 mt-1 mb-2 font-mono"
+                        rows={10}
+                        value={formData[activeTabId]?.[title]?.tag || ''}
+                        onChange={(e) => handleChange(title, 'tag', e.target.value)}
+                        placeholder="例: <h1></h1>など"
+                        style={{ whiteSpace: 'pre', overflowWrap: 'normal', overflowX: 'auto' }}
+                      />
+                      {errors[activeTabId]?.[title]?.tag && (
+                        <p className="text-red-500 text-xs mb-2"> {errors[activeTabId][title].tag}</p>
+                      )}
+                    </label>
+                  )
+                )}
 
                 <div className="col-span-1">
                   <label className="block">
                     Wordにおけるスタイル：
                     <select
                       className="w-full border p-1 mt-1"
-                      value={formData[activeTabId]?.[title]?.wordStyle || ''}
-                      onChange={(e) => handleChange(title, 'wordStyle', e.target.value)}
+                      value={formData[activeTabId]?.[title]?.word_style || ''}
+                      onChange={(e) => handleChange(title, 'word_style', e.target.value)}
                     >
                       <option value="">選択してください</option>
                       <option>見出し１</option>
@@ -819,8 +886,8 @@ const SettingsScreen = () => {
                       <input
                         type="checkbox"
                         className="mr-1"
-                        checked={formData[activeTabId]?.[title]?.splitOnPeriod === 'true'}
-                        onChange={(e) => handleChange(title, 'splitOnPeriod', e.target.checked ? 'true' : '')}
+                        checked={formData[activeTabId]?.[title]?.split_on_period === 'true'}
+                        onChange={(e) => handleChange(title, 'split_on_period', e.target.checked ? 'true' : '')}
                       />
                       句点で閉じる
                     </label>
@@ -837,8 +904,8 @@ const SettingsScreen = () => {
                     type="text"
                     className="w-full border p-1 mt-1"
                     placeholder="なし ※改行は￥n"
-                    value={formData[activeTabId]?.[title]?.prefix || ''}
-                    onChange={(e) => handleChange(title, 'prefix', e.target.value)}
+                    value={formData[activeTabId]?.[title]?.prefix_text || ''}
+                    onChange={(e) => handleChange(title, 'prefix_text', e.target.value)}
                   />
                 </label>
                 <label className="col-span-2">
@@ -847,8 +914,8 @@ const SettingsScreen = () => {
                     type="text"
                     className="w-full border p-1 mt-1"
                     placeholder="なし ※改行は￥n"
-                    value={formData[activeTabId]?.[title]?.suffix || ''}
-                    onChange={(e) => handleChange(title, 'suffix', e.target.value)}
+                    value={formData[activeTabId]?.[title]?.suffix_text || ''}
+                    onChange={(e) => handleChange(title, 'suffix_text', e.target.value)}
                   />
                 </label>
                 {(title === '大見出し' || title === '中見出し') && (
@@ -857,8 +924,8 @@ const SettingsScreen = () => {
                     <textarea
                       className="w-full border p-1 mt-1"
                       rows={2}
-                      value={formData[activeTabId]?.[title]?.closingTags || ''}
-                      onChange={(e) => handleChange(title, 'closingTags', e.target.value)}
+                      value={formData[activeTabId]?.[title]?.closing_tags || ''}
+                      onChange={(e) => handleChange(title, 'closing_tags', e.target.value)}
                       placeholder="例: </div></section>など"
                     />
                   </label>
