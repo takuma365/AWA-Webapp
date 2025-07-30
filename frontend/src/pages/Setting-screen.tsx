@@ -107,6 +107,8 @@ const SettingsScreen = () => {
   const [clientDomainEditMode, setClientDomainEditMode] = useState<boolean>(false);
   // 追加: clientDomainOmitのstate
   const [clientDomainOmit, setClientDomainOmit] = useState<boolean>(false);
+  // 追加: useBulletPointsのstate
+  const [useBulletPoints, setUseBulletPoints] = useState<boolean>(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   
@@ -692,18 +694,23 @@ const SettingsScreen = () => {
   }, [isConfirmModalOpen]);
   const targetTabName = tabs.find(tab => tab.id === targetTabId)?.name;
 
-  // タブ切り替え時にclient_domainを取得
+  // タブ切り替え時にclient_domainとuse_bullet_pointsを取得
   useEffect(() => {
     const fetchClientDomain = async () => {
       if (!activeTabId) return;
       const res = await fetch(`/api/sites/?url=${activeTabId}`);
       const sites = await res.json();
+      console.log('[DEBUG] サイト情報取得:', sites);
       if (sites.length > 0) {
         setClientDomain(sites[0].client_domain || '');
         setClientDomainOmit(!!sites[0].client_domain_omit);
+        setUseBulletPoints(sites[0].use_bullet_points !== false); // デフォルトはtrue
+        console.log('[DEBUG] use_bullet_points:', sites[0].use_bullet_points);
       } else {
         setClientDomain('');
         setClientDomainOmit(false);
+        setUseBulletPoints(true);
+        console.log('[DEBUG] サイト情報なし: use_bullet_points true');
       }
     };
     fetchClientDomain();
@@ -720,9 +727,21 @@ const SettingsScreen = () => {
     const response = await fetch(`/api/sites/${siteId}/`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_domain: clientDomain, client_domain_omit: clientDomainOmit })
+      body: JSON.stringify({
+        use_bullet_points: useBulletPoints,
+        client_domain: clientDomain, 
+        client_domain_omit: clientDomainOmit,
+      })
     });
+    console.log('[DEBUG] PATCHレスポンス status:', response.status);
     if (response.ok) {
+      const updatedRes = await fetch(`/api/sites/?url=${activeTabId}`);
+      const updatedSites = await updatedRes.json();
+      console.log('[DEBUG] 保存後の再取得:', updatedSites);
+      if (updatedSites.length > 0) {
+        setUseBulletPoints(updatedSites[0].use_bullet_points !== false);
+        console.log('[DEBUG] 保存後 use_bullet_points:', updatedSites[0].use_bullet_points);
+      }
       alert('クライアントドメインを保存しました');
       setClientDomainEditMode(false);
     } else {
@@ -967,6 +986,42 @@ const SettingsScreen = () => {
     保存する
   </button>
 </div>
+      {/* 中点除去フラグ設定 */}
+      <div className="mt-4 mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">中点除去設定</label>
+        <div className="flex gap-2 items-center">
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={useBulletPoints}
+              onChange={async (e) => {
+                setUseBulletPoints(e.target.checked);
+                // チェック変更時に即PATCH
+                if (!activeTabId) return;
+                const res = await fetch(`/api/sites/?url=${activeTabId}`);
+                const sites = await res.json();
+                if (!sites.length) return;
+                const siteId = sites[0].id;
+                const response = await fetch(`/api/sites/${siteId}/`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    use_bullet_points: e.target.checked,
+                    client_domain: clientDomain,
+                    client_domain_omit: clientDomainOmit,
+                  })
+                });
+                console.log('[DEBUG] use_bullet_points PATCH status:', response.status);
+              }}
+            />
+            中点を除去してliタグを使う
+          </label>
+          <span className="text-xs text-gray-500">
+            {useBulletPoints ? '（ON：中点を除去してリスト表示）' : '（OFF：中点を保持して改行表示）'}
+          </span>
+        </div>
+      </div>
+
       {/* タブUIの下あたりに表示・編集フォームを追加 */}
       <div className="mt-4 mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">クライアントサイトのドメイン</label>

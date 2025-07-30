@@ -60,6 +60,12 @@ class SiteViewSet(viewsets.ModelViewSet):
                 active=True
             )
         return response
+    
+    def partial_update(self, request, *args, **kwargs):
+        print('[DEBUG] PATCHリクエスト data:', request.data)
+        response = super().partial_update(request, *args, **kwargs)
+        print('[DEBUG] PATCH後のインスタンス:', self.get_object().__dict__)
+        return response
 
 
 class ConversionSettingViewSet(viewsets.ModelViewSet):
@@ -353,11 +359,15 @@ class GenerateHtmlView(APIView):
             
             try:
                 print("Starting XML to HTML conversion...")
+                # variable_valuesを取得
+                variable_values = data.get('variable_values', {})
+                
                 # xml_to_html_converter.pyを実行
                 parse_xml_to_html(
                     xml_file_path=str(document_xml_path),
                     output_file_path=str(output_html_path),
-                    json_config=data
+                    json_config=data,
+                    variable_values=variable_values
                 )
                 print("XML to HTML conversion completed successfully")
                 

@@ -49,7 +49,7 @@ class SiteSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Site
-        fields = ['id', 'name', 'url', 'client_domain', 'client_domain_omit', 'active', 'conversion_settings']
+        fields = ['id', 'name', 'url', 'client_domain', 'client_domain_omit', 'use_bullet_points', 'active', 'conversion_settings']
 
 
 class FileUploadSerializer(serializers.Serializer):

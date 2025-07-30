@@ -115,6 +115,38 @@ docker compose exec backend python app/manage.py showmigrations
 - `backend/.env.example`を参考に各自設定する
 - 本番環境では適切な環境変数を設定する
 
+## 🔧 中点除去フラグ機能
+
+### 概要
+フロントエンドで中点（・）の除去とliタグの使用をON/OFFできる機能を追加しました。
+
+### 機能詳細
+
+#### バックエンド変更
+- **モデル**: `Site`モデルに`use_bullet_points`フィールドを追加
+- **シリアライザー**: `SiteSerializer`に新しいフィールドを追加
+- **変換処理**: `xml_to_html_converter.py`でフラグに基づいて処理を分岐
+
+#### フラグの動作
+- **ON（デフォルト）**: 中点（・）を除去してliタグでリスト表示
+- **OFF**: 中点を保持してbrタグで改行表示
+
+#### フロントエンド実装
+クライアントサイトのドメイン設定の真上に以下のUIを追加：
+- チェックボックス: 「中点を除去してliタグを使う」
+- デフォルト値: ON（true）
+
+### データベース変更
+```sql
+ALTER TABLE "api_site" ADD COLUMN "use_bullet_points" boolean DEFAULT true NOT NULL;
+```
+
+### 使用方法
+1. フロントエンドでサイト設定画面を開く
+2. クライアントドメイン設定の真上にあるチェックボックスを操作
+3. 設定を保存
+4. Wordファイルをアップロードして変換実行
+
 ## 📞 緊急時対応
 
 ### サービスが起動しない場合
@@ -133,4 +165,5 @@ docker compose exec backend python app/manage.py showmigrations
 ## 📝 更新履歴
 
 - 2025/01/XX: デプロイ手順を追加
-- 2025/01/XX: 開発ルールを追加 
+- 2025/01/XX: 開発ルールを追加
+- 2025/07/23: 中点除去フラグ機能を追加（use_bullet_points） 

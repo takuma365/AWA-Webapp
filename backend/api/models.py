@@ -8,6 +8,7 @@ class Site(models.Model):
     url = models.CharField(_('URL'), max_length=100, unique=True, help_text=_('サイトのURL（英小文字）'), blank=True)
     client_domain = models.CharField(_('クライアントサイトのドメイン'), max_length=255, blank=True, help_text=_('例: https://client.com'))
     client_domain_omit = models.BooleanField(_('クライアントドメイン省略フラグ'), default=False, help_text=_('内部リンク時にドメインURLを省略するか'))
+    use_bullet_points = models.BooleanField(_('中点を除去してliタグを使う'), default=True, help_text=_('中点（・）を除去してliタグでリスト表示する'))
     active = models.BooleanField(_('有効'), default=True)
     created_at = models.DateTimeField(_('作成日時'), auto_now_add=True)
     updated_at = models.DateTimeField(_('更新日時'), auto_now=True)
@@ -62,6 +63,7 @@ class ConversionRule(models.Model):
         ('ハイライト', _('ハイライト')),
         ('赤字', _('赤字')),
         ('箱の枠', _('箱の枠')),
+        ('箱内リンクテキスト', _('箱内リンクテキスト')),
         ('箱内テキスト（中点）', _('箱内テキスト（中点）')),
         ('箱内リンクテキスト（中点）', _('箱内リンクテキスト（中点）')),
         ('箱内テキスト（番号）', _('箱内テキスト（番号）')),

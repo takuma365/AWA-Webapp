@@ -15,7 +15,7 @@ SITE_CONFIGS = {
             'id_format': '',  # 空の初期値（自動解析で設定される）
         },
         'h4_template': '<h4 id="{id}">{content}</h4>',#見出し2
-        'heading_2_format': 'heading_{main_number}-{sub_number}',
+        'heading_2_format': 'text{number}',  # 単一数字形式をデフォルトに
         'client_domain': '',  # 追加: 内部リンク判定用
         'client_domain_omit': False,  # 追加: ドメイン省略フラグ
     },
@@ -60,6 +60,30 @@ def get_closing_tags_for_section(section_name):
     get_closing_tags_for_section.rules_cache[section_name] = closing_tags
     
     return closing_tags
+
+def get_header_footer_tags():
+    """
+    文頭・文末のタグを取得する
+    
+    Returns:
+        tuple: (header_tag, footer_tag)
+               header_tag: 文頭のHTMLタグ
+               footer_tag: 文末のHTMLタグ
+    """
+    global rules
+    
+    header_tag = ""
+    footer_tag = ""
+    
+    if 'rules' in globals() and rules:
+        for rule in rules:
+            if rule.get('active', False):
+                if rule.get('section') == '文頭':
+                    header_tag = rule.get('tag', '')
+                elif rule.get('section') == '文末':
+                    footer_tag = rule.get('tag', '')
+    
+    return header_tag, footer_tag
 
 def parse_html_tag_and_extract_id_pattern(tag_string):
     """
@@ -180,8 +204,8 @@ HTML_TAGS = {
     'h4_template': get_site_config()['h4_template'],#見出し2
     'marker_template': '<span class="marker">{content}</span>',#黄色マーカー
     'bold_template': '<strong>{content}</strong>',#太字
-    'div_bordered_template': '<div style="background:#ffffff;border:1px solid #cccccc;padding:5px 10px;">{content}</div>',#罫線
-    'div_list_template': '<div style="background:#ffffff;border:1px solid #cccccc;padding:5px 10px;">\n<ul>\n{content}\n</ul>\n</div>',#リスト
+    'div_bordered_template': '<div>{content}</div>',  # 罫線
+    'div_list_template': '<div>\n<ul>\n{content}\n</ul>\n</div>',  # リスト
     'paragraph_template': '<p>{content}</p>',#パラグラフ
     'link_template': '<a href="{url}"{target}>{text}</a>',#リンク
     'list_item_template': '\t<li>{content}</li>',#リスト項目
@@ -191,10 +215,7 @@ HTML_TAGS = {
     'table_cell_td_template': '\t\t\t<td{style}>{content}</td>\n',#テーブルセル（データ）
     'br_tag': '<br />',#改行
     'nbsp_paragraph': '<p>&nbsp;</p>',#空白パラグラフ
-    'th_tag': '<th{style}>{content}</th>',
-    'td_tag': '<td{style}>{content}</td>',
-    'table_tag': '<table>{content}</table>',
-    'tbody_tag': '<tbody>{content}</tbody>',
+    # 単体テーブル要素（テーブルルール用）
     'tr_tag': '<tr>{content}</tr>',
     'th_tag': '<th>{content}</th>',
     'td_tag': '<td>{content}</td>',
@@ -226,6 +247,38 @@ UL_FLAGS = {}
 # olフラグのグローバル設定
 OL_FLAGS = {}
 
+# グローバルリンクカウンター
+global_link_counter = 1
+
+# 見出し番号をグローバルで管理（シンプルに）
+major_heading_counter = 0  # 大見出し番号
+minor_heading_counter = 0  # 中見出し番号（heading-x-yの形式用）
+cumulative_heading_counter = 0  # 累積中見出し番号（textNの形式用）
+box_links_processed = False  # 罫線内リンクテキストが処理されたかのフラグ
+
+def reset_heading_counters():
+    """見出しカウンターをリセット（累積カウンターは除く）"""
+    global major_heading_counter, minor_heading_counter, box_links_processed
+    major_heading_counter = 0
+    minor_heading_counter = 0
+    box_links_processed = False
+    print(f"【初期化】見出しカウンターをリセット: 大見出し={major_heading_counter}, 中見出し={minor_heading_counter}")
+
+def increment_major_heading():
+    """大見出し番号をインクリメントし、中見出し番号をリセット（累積カウンターは維持）"""
+    global major_heading_counter, minor_heading_counter
+    major_heading_counter += 1
+    minor_heading_counter = 0  # heading-x-y形式用の番号のみリセット
+    print(f"【COUNTER】大見出し番号を{major_heading_counter}にインクリメント（中見出し番号をリセット）")
+    return major_heading_counter
+
+def increment_minor_heading():
+    """中見出し番号をインクリメント"""
+    global minor_heading_counter
+    minor_heading_counter += 1
+    print(f"【COUNTER】中見出し番号を{minor_heading_counter}にインクリメント（大見出し={major_heading_counter}）")
+    return minor_heading_counter
+
 def split_paragraph_on_period(content, section_name='テキスト', template='<p>{content}</p>'):
     """
     句点でコンテンツを分割してpタグを作成する
@@ -245,7 +298,6 @@ def split_paragraph_on_period(content, section_name='テキスト', template='<p
     # HTMLタグが含まれている場合の処理
     if '<' in content and '>' in content:
         # HTMLタグの構造を保持しながら句点で分割
-        import re
         
         # 句点で分割（。で分割）
         sentences = content.split('。')
@@ -389,18 +441,54 @@ def is_blue_color(hex_color):
     except (ValueError, IndexError):
         return False
 
-def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
+def parse_xml_to_html(xml_file_path, output_file_path, json_config=None, variable_values=None):
     """
     XMLをHTMLに変換する（JSONコンフィグ対応版）
     """
     print("=== parse_xml_to_html 関数が開始されました ===")
-    global rules
+    global rules, global_link_counter, box_links_processed, cumulative_heading_counter
+    
+    # グローバルカウンターの初期化（未初期化の場合のみ）
+    if 'global_link_counter' not in globals() or global_link_counter is None:
+        global_link_counter = 0
+    # 見出しカウンターはリセット（これは文書単位でリセットが必要）
+    reset_heading_counters()
+    
+    # 累積見出しカウンターも0にリセット（変換処理の開始時は必ず0から始める）
+    cumulative_heading_counter = 0
+    print(f"【初期化】累積見出しカウンターを1にリセット: cumulative_heading_counter={cumulative_heading_counter}")
+    
+    # use_bullet_pointsフラグを取得（デフォルトはTrue）
+    use_bullet_points = True
+    if json_config:
+        print(f"[DEBUG] JSON CONFIG STRUCTURE: {list(json_config.keys())}")
+        # 直接プロパティとして設定がある場合（フロントエンドからの送信形式）
+        if 'use_bullet_points' in json_config:
+            use_bullet_points = json_config.get('use_bullet_points', True)
+            print(f"[DEBUG] Pattern 1 - direct use_bullet_points: {use_bullet_points}")
+        # パターン2: sites配列内に設定がある場合（別のケース用）
+        elif 'sites' in json_config and json_config['sites']:
+            site_config = json_config['sites'][0]
+            use_bullet_points = site_config.get('use_bullet_points', True)
+            print(f"[DEBUG] Pattern 1 - sites[0].use_bullet_points: {use_bullet_points}")
+        # パターン2: 直接プロパティとして設定がある場合
+        elif 'use_bullet_points' in json_config:
+            use_bullet_points = json_config.get('use_bullet_points', True)
+            print(f"[DEBUG] Pattern 2 - direct use_bullet_points: {use_bullet_points}")
+        else:
+            print(f"[DEBUG] use_bullet_points not found in JSON, using default: {use_bullet_points}")
+    print(f"[DEBUG] FINAL use_bullet_points: {use_bullet_points}")
+    
     # JSONコンフィグが提供された場合は動的設定を構築
     if json_config:
         configure_from_json_data(json_config)
         # ルールをグローバル変数に格納
         if 'conversion_settings' in json_config and json_config['conversion_settings']:
             rules = json_config['conversion_settings'][0].get('rules', [])
+        elif 'rules' in json_config:
+            rules = json_config.get('rules', [])
+        else:
+            rules = []
     else:
         # デフォルト設定を使用
         set_heading1_from_webapp(
@@ -409,8 +497,8 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             after_string=''
         )
     
-    # 単一数字カウンター（見出し2用）
-    single_heading_counter = 0
+    # 単一数字カウンター（グローバル変数を使用）
+    global single_heading_counter
     
     # 名前空間の登録
     namespaces = {
@@ -429,11 +517,13 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
         print(f"XMLの解析エラー: {e}")
         return
     
-    # 見出し1と見出し2のカウンターを初期化
-    heading_counters = defaultdict(int)
+    # 見出し番号はグローバル変数で管理（簡潔な管理）
     
-    # HTML出力用の文字列（文頭と文末のHTMLタグを削除）
-    html_output = ''
+    # 文頭・文末のタグを取得
+    header_tag, footer_tag = get_header_footer_tags()
+    
+    # HTML出力用の文字列（文頭のHTMLタグを追加）
+    html_output = header_tag
     
     # 変換結果を一時的に格納するリスト
     html_elements = []
@@ -461,8 +551,12 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
         if tag == 'tbl':
             # リンクリスト項目が蓄積されている場合は先に出力
             if hasattr(process_blue_text_links, 'link_list_items') and process_blue_text_links.link_list_items:
-                link_list_html = generate_link_list_from_items(process_blue_text_links.link_list_items)
-                html_elements.append(link_list_html)
+                link_list_html = generate_link_list_from_items(process_blue_text_links.link_list_items, use_bullet_points)
+                if link_list_html.strip().startswith('<div') or link_list_html.strip().startswith('<p'):
+                    html_elements.append(link_list_html)
+                else:
+                    div_content = HTML_TAGS['div_bordered_template'].format(content=link_list_html)
+                    html_elements.append(div_content)
                 del process_blue_text_links.link_list_items
             # ルールから表の設定を取得
             table_rule = None
@@ -490,8 +584,12 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             # 見出し処理の前にリンクリストを出力
             if pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') in ['1', '2']:
                 if hasattr(process_blue_text_links, 'link_list_items') and process_blue_text_links.link_list_items:
-                    link_list_html = generate_link_list_from_items(process_blue_text_links.link_list_items)
-                    html_elements.append(link_list_html)
+                    link_list_html = generate_link_list_from_items(process_blue_text_links.link_list_items, use_bullet_points)
+                    if link_list_html.strip().startswith('<div') or link_list_html.strip().startswith('<p'):
+                        html_elements.append(link_list_html)
+                    else:
+                        div_content = HTML_TAGS['div_bordered_template'].format(content=link_list_html)
+                        html_elements.append(div_content)
                     del process_blue_text_links.link_list_items
             
             # 見出し1の処理
@@ -499,20 +597,45 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
                 print("【DEBUG】見出し1の処理に入りました")
                 
                 # 前の見出し1のセクションを閉じる（2回目以降の場合）
-                if heading_counters[1] > 0:
+                if major_heading_counter > 0:
                     closing_tags = get_closing_tags_for_section('大見出し')
                     if closing_tags:
                         html_elements.append(closing_tags)
                         print(f"【DEBUG】大見出しセクションを閉じました: {closing_tags}")
                 
-                heading_counters[1] += 1
-                heading_counters[2] = 0  # 見出し2のカウンターをリセット
-                heading_counters['link_counter'] = 0  # リンク項目カウンターもリセット
+                # 大見出し処理前に蓄積された箱内リンクテキストを出力
+                if hasattr(process_blue_text_links, 'box_link_items') and process_blue_text_links.box_link_items:
+                    print(f"【蓄積処理】大見出し前に箱内リンクテキスト {len(process_blue_text_links.box_link_items)}項目を出力")
+                    # 箱内リンクテキスト（中点）の場合は現在の大見出し番号を使用
+                    if (process_blue_text_links.box_link_major_heading == -1 or
+                        (process_blue_text_links.box_link_rule and 
+                         process_blue_text_links.box_link_rule.get('section') == '箱内リンクテキスト（中点）')):
+                        current_major_for_output = major_heading_counter + 1  # 次の大見出し番号を使用
+                        print(f"【修正】箱内リンクテキスト（中点）で次の大見出し番号を使用: {current_major_for_output}")
+                    else:
+                        current_major_for_output = process_blue_text_links.box_link_major_heading
+                    box_link_html = generate_box_link_list_from_items(
+                        process_blue_text_links.box_link_items,
+                        process_blue_text_links.box_link_rule,
+                        current_major_for_output,
+                        use_bullet_points,
+                        headings
+                    )
+                    if box_link_html:
+                        html_elements.append(box_link_html)
+                    # 蓄積をクリア
+                    del process_blue_text_links.box_link_items
+                    del process_blue_text_links.box_link_rule
+                    del process_blue_text_links.box_link_major_heading
+                
+                # 大見出し番号をインクリメント（中見出し番号も自動リセット）
+                current_major_number = increment_major_heading()
+                print(f"【HEADING】大見出し{current_major_number}を処理")
                 
                 text_content = get_text_content(p, namespaces)
                 if text_content:
-                    heading_id = generate_heading_id_advanced(1, heading_counters[1])
-                    heading_html_content = generate_heading_html(1, heading_id, text_content, heading_counters[1])
+                    heading_id = generate_heading_id_advanced(1, current_major_number)
+                    heading_html_content = generate_heading_html(1, heading_id, text_content, current_major_number)
                     heading_html = f'{heading_html_content}\n'
                     html_elements.append(heading_html)
                     # headingsリストにはIDがある場合のみ追加
@@ -520,20 +643,46 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
                         headings.append((heading_id, text_content, 1))
                     else:
                         headings.append(('', text_content, 1))
+                continue  # 見出し1の処理後は他の処理をスキップ
             
             # 見出し3（小見出し）の処理
             if pStyle is not None and pStyle.get('{' + namespaces['w'] + '}val') == '3':
                 print("【DEBUG】見出し3（小見出し）の処理に入りました")
                 # 大見出し・中見出しのカウンターが0なら初期化
-                if heading_counters[1] == 0:
-                    heading_counters[1] = 1
-                if heading_counters[2] == 0:
-                    heading_counters[2] = 1
-                heading_counters[3] += 1
+                if major_heading_counter == 0:
+                    # 小見出し処理前に蓄積された箱内リンクテキストを出力
+                    if hasattr(process_blue_text_links, 'box_link_items') and process_blue_text_links.box_link_items:
+                        print(f"【蓄積処理】小見出し前に箱内リンクテキスト {len(process_blue_text_links.box_link_items)}項目を出力")
+                        # 箱内リンクテキスト（中点）の場合は現在の大見出し番号を使用
+                        if (process_blue_text_links.box_link_major_heading == -1 or
+                            (process_blue_text_links.box_link_rule and 
+                             process_blue_text_links.box_link_rule.get('section') == '箱内リンクテキスト（中点）')):
+                            current_major_for_output = major_heading_counter if major_heading_counter > 0 else 1
+                            print(f"【修正】箱内リンクテキスト（中点）で現在の大見出し番号を使用: {current_major_for_output}")
+                        else:
+                            current_major_for_output = process_blue_text_links.box_link_major_heading
+                        box_link_html = generate_box_link_list_from_items(
+                            process_blue_text_links.box_link_items,
+                            process_blue_text_links.box_link_rule,
+                            current_major_for_output,
+                            use_bullet_points
+                        )
+                        if box_link_html:
+                            html_elements.append(box_link_html)
+                        # 蓄積をクリア
+                        del process_blue_text_links.box_link_items
+                        del process_blue_text_links.box_link_rule
+                        del process_blue_text_links.box_link_major_heading
+                    
+                    increment_major_heading()
+                if minor_heading_counter == 0:
+                    increment_minor_heading()
+                    
+                # 中見出しには設定値を使用
                 text_content = get_text_content(p, namespaces)
                 if text_content:
-                    heading_id = generate_heading_id_advanced(4, heading_counters[1], heading_counters[2], None, heading_counters[3])
-                    heading_html_content = generate_heading_html_simple(4, heading_id, text_content, heading_counters[1], heading_counters[2], heading_counters[3])
+                    heading_id = generate_heading_id_advanced(2, major_heading_counter, minor_heading_counter, None, 1)
+                    heading_html_content = generate_heading_html_simple(2, heading_id, text_content, major_heading_counter, minor_heading_counter, 1)
                     heading_html = f'{heading_html_content}\n'
                     html_elements.append(heading_html)
                     # headingsリストに追加
@@ -564,9 +713,9 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
                     # TOCリストをリセット
                     del process_toc_entry.toc_list
                     
-                if heading_counters[1] > 0:  # 見出し1が存在する場合のみ
+                if major_heading_counter > 0:  # 見出し1が存在する場合のみ
                     # 前の中見出しのセクションを閉じる（2回目以降の場合）
-                    if heading_counters[2] > 0:
+                    if minor_heading_counter > 0:
                         closing_tags = get_closing_tags_for_section('中見出し')
                         if closing_tags:
                             html_elements.append(closing_tags)
@@ -574,13 +723,20 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
                     
                     site_config = get_site_config()
                     
-                    # 単一数字パターンかどうかをチェック
-                    if site_config.get('heading_2_single_counter', False):
-                        single_heading_counter += 1
-                        heading_id = generate_heading_id_advanced(2, heading_counters[1], None, single_heading_counter)
+                    # 中見出し番号をインクリメント（両方のカウンターを更新）
+                    current_minor_number = increment_minor_heading()  # heading-x-y形式用
+                    
+                    # 常にcumulative_heading_counterをインクリメント（一意性を保証）
+                    cumulative_heading_counter += 1
+                    heading_id = f"text{cumulative_heading_counter}"
+                    
+                    if box_links_processed:
+                        print(f"【HEADING】罫線内リンク後の中見出し: カウンター{cumulative_heading_counter}を使用")
+                        box_links_processed = False  # フラグをリセット
                     else:
-                        heading_counters[2] += 1
-                        heading_id = generate_heading_id_advanced(2, heading_counters[1], heading_counters[2])
+                        print(f"【HEADING】通常の中見出し: カウンター{cumulative_heading_counter}を使用")
+                    
+                    print(f"【HEADING】中見出し{minor_heading_counter}を処理")
                     
                     text_content = get_text_content(p, namespaces)
                     if text_content:
@@ -592,8 +748,175 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
                             headings.append((heading_id, text_content, 2))
                         else:
                             headings.append(('', text_content, 2))
+                continue  # 見出し2の処理後は他の処理をスキップ
             
-            # パラグラフ内の青色テキストとコメントのURLをリンクとして処理
+            # 罫線内の青色テキストの場合は箱内リンクテキスト処理を優先
+            elif is_paragraph_bordered(p, namespaces) and has_blue_text(p, namespaces):
+                print("【DEBUG】罫線内の青色テキストを検出")
+                text_content = get_text_content(p, namespaces)
+                print(f"【DEBUG】罫線内テキスト内容: {repr(text_content)}")
+                if text_content and text_content.strip().startswith('・'):
+                    # 罫線内青色テキストを即座に処理
+                    # ルールを決定
+                    link_rule = None
+                    for section_name in ['箱内リンクテキスト（中点）', '箱内リンクテキスト', '箱の枠']:
+                        rule = next((r for r in rules if r.get('active', False) and r.get('section') == section_name), None)
+                        if rule:
+                            print(f"【即時処理】{section_name}ルールを使用します")
+                            link_rule = rule
+                            break
+
+                    if link_rule:
+                        # テキストを処理
+                        if use_bullet_points and '・' in text_content:
+                            # 中点除去ONかつ中点がある場合：中点を除去
+                            lines = [line.lstrip('・　').strip() for line in text_content.split('\n') if line.strip().startswith('・')]
+                            print(f"【即時処理】中点除去: {lines}")
+                        else:
+                            # 中点除去OFFまたは中点がない場合：中点保持
+                            lines = [line.strip() for line in text_content.split('\n') if line.strip()]
+                            print(f"【即時処理】中点保持: {lines}")
+
+                        # HTMLを生成
+                        box_link_html = generate_box_link_list_from_items(
+                            lines,
+                            link_rule,
+                            major_heading_counter,
+                            use_bullet_points,
+                            headings
+                        )
+                        if box_link_html:
+                            html_elements.append(box_link_html)
+                            box_links_processed = True  # フラグを立てる
+                            print(f"【即時処理】罫線内青色テキストを出力: {len(lines)}項目")
+                    continue  # 他の処理をスキップ
+                    
+                    if link_rule:
+                        print(f"【DEBUG】選択されたルールを適用: {link_rule.get('section', 'Unknown')}")
+                        prefix = link_rule.get('prefix_text', '').replace('\\n', '\n')
+                        suffix = link_rule.get('suffix_text', '').replace('\\n', '\n')
+                        tag = link_rule.get('tag', '')
+                        
+                        # use_bullet_pointsフラグで中点除去を制御
+                        should_remove_bullets = use_bullet_points
+                        print(f"【DEBUG】use_bullet_points設定: {should_remove_bullets}")
+                        
+                        if should_remove_bullets and '・' in text_content:
+                            # 中点除去ONかつ中点がある場合：中点を除去
+                            link_lines = [line.lstrip('・　').strip() for line in text_content.split('\n') if line.strip().startswith('・')]
+                            print(f"【DEBUG】中点除去処理を実行")
+                        else:
+                            # 中点除去OFFまたは中点がない場合：改行で分割（中点保持）
+                            link_lines = [line.strip() for line in text_content.split('\n') if line.strip()]
+                            print(f"【DEBUG】中点保持処理を実行")
+                        
+                        print(f"【NEWDEBUG】text_content: {repr(text_content)}")
+                        print(f"【NEWDEBUG】link_lines: {link_lines}")
+                        print(f"【NEWDEBUG】link_lines数: {len(link_lines)}")
+                        
+                        # 1行分のテンプレート（li+span+a）を抽出
+                        item_template = tag
+                        li_match = re.search(r'(<li[\s\S]*?</li>)', tag)
+                        if li_match:
+                            item_template = li_match.group(1)
+                        
+                        # hrefの数字部分を昇順にする
+                        formatted_items = []
+                        print(f"【NEWDEBUG】item_template: {item_template}")
+                        print(f"【NEWDEBUG】開始 - link_linesのループ処理, グローバルカウンター: {global_link_counter}")
+                        
+                        # 現在の大見出し番号を取得（リンク発見時点での番号を記録）
+                        current_major_at_link_time = major_heading_counter
+                        print(f"【リンク処理】リンク発見時の大見出し番号: {current_major_at_link_time}")
+                        
+                        for local_idx, line in enumerate(link_lines, 1):
+                            print(f"【NEWDEBUG】処理中 - local_idx: {local_idx}, line: {line}")
+                            # テキストを置換
+                            link_html = item_template.replace('テキスト', line)
+                            if '{content}' in link_html:
+                                link_html = link_html.replace('{content}', line)
+                            print(f"【NEWDEBUG】テキスト置換後のlink_html: {link_html}")
+                            
+                            # hrefの数字を昇順にする（href属性内のみ）
+                            if 'href=' in link_html:
+                                print(f"【NEWDEBUG】href属性が見つかりました")
+                                # href属性内の数字のみを置換（他の数字は触らない）
+                                def replace_href_number(match):
+                                    quote_char = match.group(1)  # 引用符（" または '）
+                                    href_content = match.group(2)  # href属性の中身
+                                    print(f"【NEWDEBUG】replace_href_number - quote_char: {quote_char}, href_content: {href_content}, local_idx: {local_idx}")
+                                    # リンク発見時点での大見出し番号を使用
+                                    current_major = current_major_at_link_time
+                                    print(f"【HREF置換】使用する大見出し番号: {current_major}, local_idx: {local_idx}, href: {href_content}")
+                                    if current_major == 0:
+                                        print("【警告】大見出し番号が0です！まだ大見出しが処理されていない可能性があります")
+                                    
+                                    # hrefのパターンを判定して適切な番号を使用
+                                    # href内の数字の塊の数で処理を分岐
+                                    numbers = re.findall(r'\d+', href_content)
+                                    print(f"【HREF判定】href_content='{href_content}', numbers={numbers}")
+                                    
+                                    # 次の中見出し番号を計算（現在のminor_heading_counter + ローカルインデックス）
+                                    global minor_heading_counter
+                                    next_heading_number = minor_heading_counter + local_idx
+                                    print(f"【DEBUG】現在の中見出し番号: {minor_heading_counter}, ローカルインデックス: {local_idx}, 次の番号: {next_heading_number}")
+
+                                    if '-' in href_content and href_content.count('-') >= 2:
+                                        # heading-1-1のようなパターンの場合（数字が2つ）
+                                        parts = href_content.split('-')
+                                        if len(parts) >= 3:
+                                            # 最後から2番目を大見出し番号、最後を中見出し番号に
+                                            parts[-2] = str(current_major)  # 大見出し番号
+                                            parts[-1] = str(next_heading_number)  # 次の中見出し番号
+                                            new_href_content = '-'.join(parts)
+                                            print(f"【2つの数字】大見出し番号{current_major}と中見出し番号{next_heading_number}を使用")
+                                        else:
+                                            # フォールバック
+                                            new_href_content = href_content
+                                    else:
+                                        # text1のようなパターンの場合（数字が1つ）
+                                        # 次の中見出し番号を使用
+                                        new_href_content = re.sub(r'\d+', str(next_heading_number), href_content, count=1)
+                                        print(f"【1つの数字】次の中見出し番号{next_heading_number}を使用")
+                                    
+                                    print(f"【NEWDEBUG】置換後のhref_content: {new_href_content}")
+                                    # 元の形式でhref属性を再構築
+                                    result = f'href={quote_char}{new_href_content}{quote_char}'
+                                    print(f"【NEWDEBUG】最終的なhref属性: {result}")
+                                    return result
+                                
+                                # href属性のみをターゲットにした置換
+                                old_link_html = link_html
+                                link_html = re.sub(r'href=(["\'])([^"\']*)\1', replace_href_number, link_html)
+                                print(f"【NEWDEBUG】href置換前: {old_link_html}")
+                                print(f"【NEWDEBUG】href置換後: {link_html}")
+                            else:
+                                print(f"【NEWDEBUG】href属性が見つかりませんでした")
+                            formatted_items.append(link_html)
+                            print(f"【NEWDEBUG】local_idx={local_idx}のアイテム完了: {link_html}")
+                        
+                        print(f"【NEWDEBUG】ループ完了 - formatted_items: {formatted_items}")
+                        # 最終的なHTMLを構築
+                        content = '\n'.join(formatted_items)
+                        final_html = f"{prefix}{content}{suffix}"
+                        print(f"【NEWDEBUG】最終的なHTML: {final_html}")
+                        html_elements.append(final_html)
+                    else:
+                        print("【DEBUG】適用可能なルールが見つかりません（箱内リンクテキスト（中点）、箱内リンクテキスト、箱の枠すべて無効）")
+                        # フォールバック: 通常の箱内テキスト処理
+                        if use_bullet_points and '・' in text_content:
+                            # 中点除去ONかつ中点がある場合：中点を除去
+                            link_lines = [line.lstrip('・　').strip() for line in text_content.split('\n') if line.strip().startswith('・')]
+                        else:
+                            # 中点除去OFFまたは中点がない場合：改行で分割
+                            link_lines = [line.strip() for line in text_content.split('\n') if line.strip()]
+                        formatted_html = process_bullet_list_items(link_lines, '', use_bullet_points)
+                        html_elements.append(formatted_html)
+                else:
+                    # それ以外は従来通り
+                    pass
+            
+            # パラグラフ内の青色テキストとコメントのURLをリンクとして処理（罫線内でない場合）
             elif has_blue_text_and_url(p, comment_info, namespaces):
                 print("【DEBUG】青色テキストとURLの処理に入りました")
                 blue_text_segments = find_blue_text_segments(p, namespaces)
@@ -621,88 +944,34 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
                             )
                             html_elements.append(paragraph_html)
             
-            # 罫線内の青色テキストの場合は何もしない（見出し直後のリンクリストに任せる）
-            elif is_paragraph_bordered(p, namespaces) and has_blue_text(p, namespaces):
-                print("【DEBUG】罫線内の青色テキストを検出")
-                print("【DEBUG】罫線内の青色テキストを検出")
-                # 青色テキストの内容を確認
-                text_content = get_text_content(p, namespaces)
-                if text_content and text_content.strip().startswith('・'):
-                    # 「・」で始まる青色テキストの場合は、リンクリスト項目として処理
-                    # 「・」を除去してテキストを取得
-                    link_text = text_content.strip()[1:].strip()
-                    
-                    # 動的にリンク項目番号をカウント
-                    heading_counters['link_counter'] += 1
-                    
-                    # フォーマットに応じて適切なパラメータを渡す
-                    link_format = ID_PATTERNS['link_item_format']
-                    if '{main_number}' in link_format and '{sub_number}' in link_format:
-                        # 複数数字パターン（例: heading_{main_number}-{sub_number}）
-                        heading_id = link_format.format(main_number=heading_counters[1], sub_number=heading_counters['link_counter'])
-                    elif '{number}' in link_format:
-                        # 単一数字パターン（例: text{number}, heading{number}）
-                        heading_id = link_format.format(number=heading_counters['link_counter'])
-                    else:
-                        # フォールバック
-                        heading_id = link_format.format(main_number=heading_counters[1], sub_number=heading_counters['link_counter'])
-                    
-                    # リンク項目として保存
-                    if not hasattr(process_blue_text_links, 'link_list_items'):
-                        process_blue_text_links.link_list_items = []
-                    
-                    link_item = f'<a href="#{heading_id}">{link_text}</a>'
-                    process_blue_text_links.link_list_items.append(link_item)
-                elif text_content and re.match(r'^\d+\.', text_content.strip()):
-                    # 「数字.」で始まる青色テキストの場合は、番号付きリンクリスト項目として処理
-                    # 数字.を除去してテキストを取得
-                    match = re.match(r'^\d+\.\s*(.*)', text_content.strip())
-                    if match:
-                        link_text = match.group(1)
-                        
-                        # 動的にリンク項目番号をカウント
-                        heading_counters['link_counter'] += 1
-                        
-                        # フォーマットに応じて適切なパラメータを渡す
-                        link_format = ID_PATTERNS['link_item_format']
-                        if '{main_number}' in link_format and '{sub_number}' in link_format:
-                            # 複数数字パターン（例: heading_{main_number}-{sub_number}）
-                            heading_id = link_format.format(main_number=heading_counters[1], sub_number=heading_counters['link_counter'])
-                        elif '{number}' in link_format:
-                            # 単一数字パターン（例: text{number}, heading{number}）
-                            heading_id = link_format.format(number=heading_counters['link_counter'])
-                        else:
-                            # フォールバック
-                            heading_id = link_format.format(main_number=heading_counters[1], sub_number=heading_counters['link_counter'])
-                        
-                        # リンク項目として保存
-                        if not hasattr(process_blue_text_links, 'numbered_link_list_items'):
-                            process_blue_text_links.numbered_link_list_items = []
-                        
-                        link_item = f'<a href="#{heading_id}">{link_text}</a>'
-                        process_blue_text_links.numbered_link_list_items.append(link_item)
-                else:
-                    # 「・」や「数字.」で始まらない罫線内青色テキストは何もしない
-                    pass
-            
             # マーカー、太字、罫線の処理
             else:
-                print("【DEBUG】通常のパラグラフ処理に入りました")
                 # 罫線の判定
                 is_bordered = is_paragraph_bordered(p, namespaces)
-                print("【DEBUG】罫線判定結果:", is_bordered)
                 if is_bordered:
                     text_content = get_text_content(p, namespaces)
                     print("【DEBUG】罫線内テキスト:", repr(text_content))
                 
                 # パラグラフ内のテキスト実行を処理し、マーカーや太字を適切に適用
                 formatted_content = process_paragraph_runs(p, namespaces)
+                print(f"【DEBUG】formatted_content: {repr(formatted_content)}")
+                print(f"【DEBUG】is_bordered: {is_bordered}")
                 
-                if formatted_content:
+                if formatted_content or is_bordered:  # 罫線がある場合は内容が空でも処理
                     if is_bordered:
-                        div_content = HTML_TAGS['div_bordered_template'].format(content=formatted_content)
+                        # 「箱の枠」ルールから設定を取得
+                        box_rule = next((r for r in rules if r.get('active', False) and r.get('section') == '箱の枠'), None)
+                        if box_rule and box_rule.get('tag'):
+                            # 設定からテンプレートを使用
+                            div_template = box_rule.get('tag', '')
+                            div_content = div_template.format(content=formatted_content or "")
+                            print(f"【DEBUG】箱の枠テンプレート適用: {repr(div_content)}")
+                        else:
+                            # フォールバック: デフォルトのdiv_bordered_template
+                            div_content = HTML_TAGS['div_bordered_template'].format(content=formatted_content or "")
+                            print(f"【DEBUG】デフォルト箱の枠テンプレート適用: {repr(div_content)}")
                         html_elements.append(div_content)
-                    else:
+                    elif formatted_content:  # 罫線がない場合のみformatted_contentをチェック
                         # HTMLタグが含まれている場合は句点分割をスキップ
                         if '<' in formatted_content and '>' in formatted_content:
                             paragraph_html = HTML_TAGS['paragraph_template'].format(content=formatted_content)
@@ -718,25 +987,61 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
     
     # 処理の最後に残ったリンクリスト項目を出力
     if hasattr(process_blue_text_links, 'link_list_items') and process_blue_text_links.link_list_items:
-        link_list_html = generate_link_list_from_items(process_blue_text_links.link_list_items)
+        # 優先順位付きでルールを取得
+        rule = None
+        for section_name in ['箱内リンクテキスト（中点）', '箱内リンクテキスト', '箱内テキスト（中点）', '箱の枠']:
+            rule = next((r for r in rules if r.get('active', False) and r.get('section') == section_name), None)
+            if rule:
+                print(f"【最終出力】{section_name}ルールを使用（残りリンクリスト）")
+                break
+        before = rule['prefix_text'] if rule and 'prefix_text' in rule else ''
+        after = rule['suffix_text'] if rule and 'suffix_text' in rule else ''
+        link_list_html = generate_link_list_from_items(process_blue_text_links.link_list_items, use_bullet_points, before, after)
         html_elements.append(link_list_html)
         del process_blue_text_links.link_list_items
     
     # 番号付きリンクリスト項目を出力
     if hasattr(process_blue_text_links, 'numbered_link_list_items') and process_blue_text_links.numbered_link_list_items:
-        numbered_list_html = generate_numbered_link_list_from_items(process_blue_text_links.numbered_link_list_items)
+        rule = next((r for r in rules if r.get('active', False) and r.get('section') == '箱内テキスト（番号）'), None)
+        before = rule['prefix_text'] if rule and 'prefix_text' in rule else ''
+        after = rule['suffix_text'] if rule and 'suffix_text' in rule else ''
+        numbered_list_html = generate_link_list_from_items(process_blue_text_links.numbered_link_list_items, use_bullet_points, before, after)
         html_elements.append(numbered_list_html)
         del process_blue_text_links.numbered_link_list_items
     
     # ドキュメントの最後に残ったセクションを閉じる
-    if heading_counters[2] > 0:
+    if minor_heading_counter > 0:
         # 最後の中見出しセクションを閉じる
         closing_tags = get_closing_tags_for_section('中見出し')
         if closing_tags:
             html_elements.append(closing_tags)
             print(f"【DEBUG】最後の中見出しセクションを閉じました: {closing_tags}")
     
-    if heading_counters[1] > 0:
+    # 処理の最後に残っている蓄積された箱内リンクテキストを出力
+    if hasattr(process_blue_text_links, 'box_link_items') and process_blue_text_links.box_link_items:
+        print(f"【蓄積処理】処理最後に箱内リンクテキスト {len(process_blue_text_links.box_link_items)}項目を出力")
+        # 箱内リンクテキスト（中点）の場合は現在の大見出し番号を使用
+        if (process_blue_text_links.box_link_major_heading == -1 or
+            (process_blue_text_links.box_link_rule and 
+             process_blue_text_links.box_link_rule.get('section') == '箱内リンクテキスト（中点）')):
+            current_major_for_output = major_heading_counter
+            print(f"【修正】箱内リンクテキスト（中点）で現在の大見出し番号を使用: {current_major_for_output}")
+        else:
+            current_major_for_output = process_blue_text_links.box_link_major_heading
+        box_link_html = generate_box_link_list_from_items(
+            process_blue_text_links.box_link_items,
+            process_blue_text_links.box_link_rule,
+            current_major_for_output,
+            use_bullet_points
+        )
+        if box_link_html:
+            html_elements.append(box_link_html)
+        # 蓄積をクリア
+        del process_blue_text_links.box_link_items
+        del process_blue_text_links.box_link_rule
+        del process_blue_text_links.box_link_major_heading
+
+    if major_heading_counter > 0:
         # 最後の大見出しセクションを閉じる
         closing_tags = get_closing_tags_for_section('大見出し')
         if closing_tags:
@@ -744,8 +1049,7 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
             print(f"【DEBUG】最後の大見出しセクションを閉じました: {closing_tags}")
     
     # 連続するdivの処理
-    print("【DEBUG】combine_consecutive_divs呼び出し直前のhtml_elements:", repr(html_elements))
-    processed_html = combine_consecutive_divs(html_elements)
+    processed_html = combine_consecutive_divs(html_elements, use_bullet_points)
     
     # 最終的なHTMLの修正
     processed_html = fix_consecutive_divs(processed_html)
@@ -760,8 +1064,12 @@ def parse_xml_to_html(xml_file_path, output_file_path, json_config=None):
     processed_html = remove_empty_text_tags(processed_html)
     print("=== remove_empty_text_tags が完了しました ===")
     
-    # HTML出力に結合（文末のHTMLタグを削除）
-    html_output += processed_html
+    # HTML出力に結合（文末のHTMLタグを追加）
+    html_output += processed_html + footer_tag
+    
+    # 変数置換を適用
+    if variable_values:
+        html_output = replace_variables_in_html(html_output, variable_values)
     
     # HTMLファイルを出力
     with open(output_file_path, 'w', encoding='utf-8') as f:
@@ -781,27 +1089,7 @@ def find_current_heading_number(html_elements):
     
     return 0
 
-def generate_subheading_links(subheadings):
-    """小見出しへのリンクリストを生成"""
-    div_style = 'background:#ffffff;border:1px solid #cccccc;padding:5px 10px;'
-    result = f'<div style="{div_style}">\n<ul>\n'
-    
-    for heading_id, heading_text in subheadings:
-        result += f'\t<li><a href="#{heading_id}">{heading_text}</a></li>\n'
-    
-    result += '</ul>\n</div>\n'
-    return result
 
-def generate_heading_links(headings):
-    """見出しへのリンクリストを生成する"""
-    div_style = 'background:#ffffff;border:1px solid #cccccc;padding:5px 10px;'
-    result = f'<div style="{div_style}">\n<ul>\n'
-    
-    for heading_id, heading_text, level in headings:
-        result += f'\t<li><a href="#{heading_id}">{heading_text}</a></li>\n'
-    
-    result += '</ul>\n</div>\n'
-    return result
 
 def has_blue_text(p, namespaces):
     """パラグラフに青色テキストがあるか判定"""
@@ -1106,25 +1394,17 @@ def get_link_from_comments(p, comment_info, namespaces):
     
     return ""
 
-def combine_consecutive_divs(html_elements):
+def combine_consecutive_divs(html_elements, use_bullet_points=True):
     """連続するdivを一つにまとめ、内容を条件に応じて整形する（動的テンプレート対応）"""
-    print("【DEBUG】combine_consecutive_divs関数が呼び出されました")
-    print("【DEBUG】関数内のhtml_elements:", repr(html_elements))
-    
     result = ""
     div_pattern = re.compile(r'<div[^>]*>(.*?)</div>', re.DOTALL)
-    
     i = 0
     while i < len(html_elements):
         current = html_elements[i]
-        
-        # divかどうかチェック
         div_match = div_pattern.search(current)
         if div_match:
-            # 連続するdivを探す
             div_contents = []
             div_contents.append(div_match.group(1))
-            
             j = i + 1
             while j < len(html_elements):
                 next_match = div_pattern.search(html_elements[j])
@@ -1133,99 +1413,221 @@ def combine_consecutive_divs(html_elements):
                     j += 1
                 else:
                     break
-            
-            # 連続するdivがある場合は一つにまとめる
             if j > i + 1:
-                # 既にリストが生成されている内容か確認
                 has_existing_list = any('<ul>' in content and '<li>' in content for content in div_contents)
+                # 個別の<li>要素も統合対象にする
+                has_individual_li = any('<li>' in content and '<ul>' not in content for content in div_contents)
+                print(f"【ULDEBUG】combine_consecutive_divs - has_existing_list: {has_existing_list}")
+                print(f"【ULDEBUG】div_contents: {div_contents}")
+                # 既存のul/li形式を検出して統合処理
+                print("【ULDEBUG】div統合処理を実行")
                 
-                if has_existing_list:
-                    # 既存のリストがある場合は、最初のリスト要素をそのまま使用
-                    for content in div_contents:
-                        if '<ul>' in content and '<li>' in content:
-                            result += current  # 元のHTML要素をそのまま使用
-                            break
-                else:
-                    # リスト形式の内容かどうかを判定
-                    bullet_items = []
-                    numbered_items = []
-                    non_list_items = []
-                    
-                    for content in div_contents:
-                        content_stripped = content.strip()
-                        if content_stripped.startswith('・'):
-                            bullet_items.append(content_stripped)
-                        elif re.match(r'^\d+\.', content_stripped):  # 数字.で始まる項目
-                            numbered_items.append(content_stripped)
-                        else:
-                            non_list_items.append(content)
-                    
-                    if bullet_items:
-                        # 箱内テキスト（中点）のテンプレートを取得
-                        list_template = HTML_TAGS.get('div_list_template', '<div style="background:#ffffff;border:1px solid #cccccc;padding:5px 10px;"><ul><li>テキスト</li></ul></div>')
-                        combined_content = process_bullet_list_items(bullet_items, list_template)
-                        result += combined_content + '\n'
-                    elif numbered_items:
-                        # 箱内テキスト（番号）のテンプレートを取得
-                        ordered_template = HTML_TAGS.get('div_ordered_list_template', '<div style="background:#ffffff;border:1px solid #cccccc;padding:5px 10px;"><ol><li>テキスト</li></ol></div>')
-                        combined_content = process_numbered_list_items(numbered_items, ordered_template)
-                        result += combined_content + '\n'
+                # 既存の<ul><li>...</li></ul>形式を検出
+                ul_li_items = []
+                bullet_items = []
+                numbered_items = []
+                non_list_items = []
+                
+                for content in div_contents:
+                    content_stripped = content.strip()
+                    # <ul><li>...</li></ul>形式の検出
+                    if content_stripped.startswith('<ul>') and content_stripped.endswith('</ul>') and '<li>' in content_stripped:
+                        # <li>...</li>部分を抽出
+                        li_match = re.search(r'<li[^>]*>(.*?)</li>', content_stripped, re.DOTALL)
+                        if li_match:
+                            li_content = li_match.group(1)
+                            ul_li_items.append(li_content)
+                            print(f"【ULDEBUG】抽出されたli内容: {repr(li_content)}")
+                    # 個別の<li>要素の検出
+                    elif content_stripped.startswith('<li>') and content_stripped.endswith('</li>') and '<ul>' not in content_stripped:
+                        # <li>...</li>部分を抽出
+                        li_match = re.search(r'<li[^>]*>(.*?)</li>', content_stripped, re.DOTALL)
+                        if li_match:
+                            li_content = li_match.group(1)
+                            ul_li_items.append(li_content)
+                            print(f"【ULDEBUG】個別li要素から抽出: {repr(li_content)}")
+                    elif content_stripped.startswith('・'):
+                        bullet_items.append(content_stripped)
+                    elif re.match(r'^\d+\.', content_stripped):
+                        numbered_items.append(content_stripped)
                     else:
-                        # 通常のテキストの場合は従来の処理
-                        div_style = 'background:#ffffff;border:1px solid #cccccc;padding:5px 10px;'
-                        combined_div = f'<div style="{div_style}">\n'
-                        for idx, content in enumerate(div_contents):
-                            combined_div += content
-                            if idx < len(div_contents) - 1:
+                        non_list_items.append(content)
+                if ul_li_items:
+                    # 既存の<ul><li>...</li></ul>形式を統合
+                    print(f"【ULDEBUG】ul_li_items統合処理: {ul_li_items}")
+                    
+                    # 箱内リンクテキスト（中点）ルールを優先順位付きで取得
+                    link_rule = None
+                    global rules
+                    if 'rules' in globals() and rules:
+                        # 優先順位: 箱内リンクテキスト（中点） → 箱内リンクテキスト → 箱の枠
+                        for section_name in ['箱内リンクテキスト（中点）', '箱内リンクテキスト', '箱の枠']:
+                            link_rule = next((r for r in rules if r.get('active', False) and r.get('section') == section_name), None)
+                            if link_rule:
+                                print(f"【統合処理】{section_name}ルールを使用します")
+                                break
+                    
+                    if link_rule:
+                        prefix = link_rule.get('prefix_text', '').replace('\\n', '\n')
+                        suffix = link_rule.get('suffix_text', '').replace('\\n', '\n')
+                        print(f"【ULDEBUG】統合処理 - prefix: {repr(prefix)}, suffix: {repr(suffix)}")
+                        
+                        # 箱内リンクテキスト（中点）の場合は現在の大見出し番号を使用
+                        if link_rule.get('section') == '箱内リンクテキスト（中点）':
+                            global major_heading_counter
+                            current_major = major_heading_counter
+                            print(f"【統合処理修正】箱内リンクテキスト（中点）で現在の大見出し番号を使用: {current_major}")
+                        else:
+                            # その他のルールでは従来通りli要素から大見出し番号を抽出
+                            current_major = 1  # デフォルト値
+                            
+                            # 最初のli要素のhrefから大見出し番号を抽出
+                            if ul_li_items:
+                                first_item = ul_li_items[0]
+                                href_match = re.search(r'href=["\'](#[^"\']*heading-(\d+)-\d+)', first_item)
+                                if href_match:
+                                    current_major = int(href_match.group(2))
+                                    print(f"【統合処理】li要素から抽出した大見出し番号: {current_major}")
+                                else:
+                                    # フォールバック：グローバル変数を使用
+                                    current_major = major_heading_counter
+                                    print(f"【統合処理】フォールバック - グローバル変数から取得: {current_major}")
+                            else:
+                                print("【統合処理警告】ul_li_itemsが空です！")
+                        
+                        # 各li要素を再構築（href内の数字を見出し番号で置換）
+                        formatted_lis = []
+                        
+                        # 最初のli要素からベース番号を抽出
+                        base_number = None
+                        if ul_li_items:
+                            first_item = ul_li_items[0]
+                            href_match = re.search(r'href=["\'](#[^"\']*?)(\d+)([^"\']*)["\']', first_item)
+                            if href_match:
+                                base_number = int(href_match.group(2))
+                                print(f"【統合処理】ベース番号を抽出: {base_number}")
+                        
+                        for local_idx, item in enumerate(ul_li_items, 1):
+                            # href内の数字を連番で置換
+                            updated_item = item
+                            if 'href=' in updated_item and base_number is not None:
+                                def replace_href_with_sequential_numbers(match):
+                                    quote_char = match.group(1)
+                                    href_content = match.group(2)
+                                    
+                                    # ベース番号 + 1 + (local_idx - 1) で連番を計算（基準点を1つ下げる）
+                                    target_number = (base_number + 1) + (local_idx - 1)
+                                    
+                                    # href内の数字を連番で置換
+                                    if re.search(r'\d+', href_content):
+                                        new_href_content = re.sub(r'\d+', str(target_number), href_content)
+                                        print(f"【統合処理】href連番更新(idx={local_idx}): {href_content} → {new_href_content}")
+                                    else:
+                                        new_href_content = href_content
+                                    
+                                    return f'href={quote_char}{new_href_content}{quote_char}'
+                                
+                                updated_item = re.sub(r'href=(["\'])([^"\']*)\1', replace_href_with_sequential_numbers, updated_item)
+                                print(f"【ULDEBUG】href更新(idx={local_idx}): {item} → {updated_item}")
+                            
+                            formatted_lis.append(f'\t\t<li>{updated_item}</li>')
+                        
+                        # 最終的なHTMLを構築
+                        content = '\n'.join(formatted_lis)
+                        final_html = f"{prefix}\n{content}\n{suffix}"
+                        print(f"【ULDEBUG】統合結果: {repr(final_html)}")
+                        result += final_html + '\n'
+                    else:
+                        # フォールバック: 元の形式で結合
+                        for content in div_contents:
+                            result += content + '\n'
+                elif bullet_items:
+                    # 改良した関数で自動的にルールを判別
+                    combined_content = process_bullet_list_items(bullet_items, '', use_bullet_points)
+                    result += combined_content + '\n'
+                elif numbered_items:
+                    # 改良した関数で自動的にルールを判別
+                    combined_content = process_numbered_list_items(numbered_items, '', use_bullet_points)
+                    result += combined_content + '\n'
+                else:
+                    # 通常のテキストの場合は従来の処理
+                    div_style = 'background:#ffffff;border:1px solid #cccccc;padding:5px 10px;'
+                    combined_div = f'<div style="{div_style}">\n'
+                    for idx, content in enumerate(div_contents):
+                        combined_div += content
+                        # リンクテキスト（<a href=と<li>を含む）の場合は<br />を挿入しない
+                        if idx < len(div_contents) - 1:
+                            # リンクテキストまたは箱内リンクテキストの場合は改行のみ
+                            if ('<a href=' in content and '<li>' in content) or ('div_link_list_template' in HTML_TAGS and HTML_TAGS['div_link_list_template'] in content):
+                                combined_div += '\n'
+                            else:
                                 combined_div += '<br />\n'
-                        combined_div += '</div>\n'
-                        result += combined_div
+                    combined_div += '</div>\n'
+                    result += combined_div
                 i = j
             else:
-                # 連続していない場合は、単一のdivを条件に応じて整形
                 content = div_match.group(1)
-                
-                # 既にリストが含まれているか確認
-                if '<ul>' in content and '<li>' in content:
-                    # 既存のリストがある場合はそのまま出力
-                    result += current
-                elif content.strip().startswith('・'):
-                    # 「・」で始まる場合は動的テンプレートを使用
-                    list_template = HTML_TAGS.get('div_list_template', '<div style="background:#ffffff;border:1px solid #cccccc;padding:5px 10px;"><ul><li>テキスト</li></ul></div>')
-                    formatted_content = process_bullet_list_items([content.strip()], list_template)
+                print(f"【ULDEBUG】単一div処理 - current: {repr(current)}")
+                print(f"【ULDEBUG】単一div処理 - content: {repr(content)}")
+                # ulありの分岐を無効化
+                # if '<ul>' in content and '<li>' in content:
+                #     print("【ULDEBUG】ul/li含有のため、そのまま追加")
+                #     result += current
+                # elif content.strip().startswith('・'):
+                if content.strip().startswith('・'):
+                    print("【ULDEBUG】中点で始まるため、process_bullet_list_items呼び出し")
+                    # 改良した関数で自動的にルールを判別
+                    formatted_content = process_bullet_list_items([content.strip()], '', use_bullet_points)
                     result += formatted_content + '\n'
                 elif re.match(r'^\d+\.', content.strip()):
-                    # 「数字.」で始まる場合は番号付きリストのテンプレートを使用
-                    ordered_template = HTML_TAGS.get('div_ordered_list_template', '<div style="background:#ffffff;border:1px solid #cccccc;padding:5px 10px;"><ol><li>テキスト</li></ol></div>')
-                    formatted_content = process_numbered_list_items([content.strip()], ordered_template)
+                    # 改良した関数で自動的にルールを判別
+                    formatted_content = process_numbered_list_items([content.strip()], '', use_bullet_points)
                     result += formatted_content + '\n'
                 else:
-                    # そのままdivを出力
-                    result += current
-                
+                    # リンクテキスト（<a href=を含む）の場合は元のdiv構造を保持
+                    if '<a href=' in content:
+                        print("【ULDEBUG】リンクテキストのため、元のdiv構造を保持")
+                        # 単一div処理でも元のdiv構造を保持
+                        result += current + '\n'
+                    else:
+                        print("【ULDEBUG】通常のテキストのため、content + <br />で処理")
+                        result += content + '<br />\n'
                 i += 1
         else:
-            # divでない場合はそのまま追加
             result += current
             i += 1
-    
     return result
 
 def convert_table_to_html(tbl_element, namespaces, table_rule=None):
     """XMLのテーブル要素をHTMLテーブルに変換する（ルール対応版）"""
-    # デフォルトテンプレート
-    table_tag = HTML_TAGS.get('table_tag', '<table>{content}</table>')
+    print(f"【TABLE_CONVERT】convert_table_to_html関数が呼ばれました")
+    
+    # HTML_TAGSから個別のタグを取得してテンプレートを再構築
+    table_tag = HTML_TAGS.get('table_tag', '<table style="width: 100%;">')
     tbody_tag = HTML_TAGS.get('tbody_tag', '<tbody>{content}</tbody>')
     tr_tag = HTML_TAGS.get('tr_tag', '<tr>{content}</tr>')
     th_tag = HTML_TAGS.get('th_tag', '<th>{content}</th>')
     td_tag = HTML_TAGS.get('td_tag', '<td>{content}</td>')
+    
+    print(f"【TABLE_CONVERT】取得したタグ - table_tag: '{table_tag}', tbody_tag: '{tbody_tag}'")
+    
+    # テンプレートを直接構築
+    if table_tag and tbody_tag:
+        # table_tagから開始タグのみを抽出
+        table_start_match = re.match(r'(<table[^>]*>)', table_tag)
+        clean_table_start = table_start_match.group(1) if table_start_match else '<table>'
+        # 完全なテンプレートを構築
+        table_template = clean_table_start + '<tbody>{content}</tbody></table>'
+    else:
+        # フォールバック
+        table_template = '<table style="width: 100%;"><tbody>{content}</tbody></table>'
+    
+    print(f"【TABLE_CONVERT】構築したテンプレート: '{table_template}'")
 
     # ルールが渡されていれば上書き
     if table_rule:
-        if table_rule.get('table_tag'):
-            table_tag = table_rule['table_tag']
-        if table_rule.get('tbody_tag'):
-            tbody_tag = table_rule['tbody_tag']
+        if table_rule.get('tag'):  # table_rule.tagがある場合は全体テンプレートとして使用
+            table_template = table_rule['tag']
         if table_rule.get('tr_tag'):
             tr_tag = table_rule['tr_tag']
         if table_rule.get('th_tag'):
@@ -1234,7 +1636,7 @@ def convert_table_to_html(tbl_element, namespaces, table_rule=None):
             td_tag = table_rule['td_tag']
 
     trs = tbl_element.findall('.//w:tr', namespaces)
-    tbody_content = ""
+    table_content = ""
     for tr_idx, tr in enumerate(trs):
         row_content = ""
         tcs = tr.findall('.//w:tc', namespaces)
@@ -1252,7 +1654,6 @@ def convert_table_to_html(tbl_element, namespaces, table_rule=None):
                 tag_html = th_tag.replace('{content}', cell_content)
                 row_content += tag_html
             else:
-                import re
                 if '<ul' in td_tag and '<li>{content}</li>' in td_tag:
                     # 「・」で分割しliタグで囲む（「・」は除去しない）、li内の<br>は除去
                     items = [f'・{item}' if not item.startswith('・') else item for item in re.split(r'・', cell_content) if item.strip()]
@@ -1264,9 +1665,12 @@ def convert_table_to_html(tbl_element, namespaces, table_rule=None):
                     tag_html = td_tag.replace('{content}', cell_content)
                     row_content += tag_html
         row_html = tr_tag.replace('{content}', row_content)
-        tbody_content += row_html
-    tbody_html = tbody_tag.replace('{content}', tbody_content)
-    table_html = table_tag.replace('{content}', tbody_html)
+        table_content += row_html
+    
+    # table_templateの{content}部分にtable_contentを埋め込み
+    print(f"【TABLE_CONVERT】table_content: '{table_content}'")
+    table_html = table_template.replace('{content}', table_content)
+    print(f"【TABLE_CONVERT】最終的なtable_html: '{table_html}'")
     return table_html
 
 def get_cell_background_style(tc, namespaces):
@@ -1303,41 +1707,32 @@ def get_cell_background_style(tc, namespaces):
 
 def is_paragraph_bordered(p, namespaces):
     """パラグラフが罫線を持つかを判定"""
-    print("【DEBUG】is_paragraph_bordered関数が呼び出されました")
     
     # 直接パラグラフに罫線属性がある場合
     pBdr = p.find('.//w:pBdr', namespaces)
     if pBdr is not None:
-        print("【DEBUG】pBdr要素を検出: True")
         return True
     
     # 段落内のボックス属性を確認
     shd_elements = p.findall('.//w:shd[@w:fill]', namespaces)
-    print(f"【DEBUG】shd_elements数: {len(shd_elements)}")
     if shd_elements:
         for shd in shd_elements:
             fill_value = shd.get('{' + namespaces['w'] + '}fill')
-            print(f"【DEBUG】fill_value: {fill_value}")
             if fill_value and fill_value != 'auto':
-                print("【DEBUG】有効なfill_valueを検出: True")
                 return True
     
     # その他の罫線判定方法を追加
     # 背景色による判定
     bg_elements = p.findall('.//w:shd', namespaces)
-    print(f"【DEBUG】bg_elements数: {len(bg_elements)}")
     for bg in bg_elements:
         fill = bg.get('{' + namespaces['w'] + '}fill')
         color = bg.get('{' + namespaces['w'] + '}color')
-        print(f"【DEBUG】bg_fill: {fill}, bg_color: {color}")
         if fill and fill != 'auto':
-            print("【DEBUG】背景色による罫線判定: True")
             return True
     
     # 段落のスタイル属性を確認
     pPr = p.find('.//w:pPr', namespaces)
     if pPr is not None:
-        print("【DEBUG】pPr要素を検出")
         # スタイル名を確認
         pStyle = pPr.find('.//w:pStyle', namespaces)
         if pStyle is not None:
@@ -1347,8 +1742,6 @@ def is_paragraph_bordered(p, namespaces):
             if style_val and any(keyword in style_val.lower() for keyword in ['border', 'box', 'frame', 'outline']):
                 print("【DEBUG】罫線関連スタイルを検出: True")
                 return True
-    
-    print("【DEBUG】罫線判定結果: False")
     return False
 
 def process_paragraph_runs(p, namespaces):
@@ -1872,15 +2265,6 @@ def configure_from_json_data(json_data):
         
         template_tag, id_format, pattern_type, text_position = analyze_heading_structure(tag_string)
         
-        print(f"[DEBUG] 見出し1設定:")
-        print(f"  元のタグ: {tag_string}")
-        print(f"  テンプレート: {template_tag}")
-        print(f"  IDフォーマット: {id_format}")
-        print(f"  パターンタイプ: {pattern_type}")
-        print(f"  テキスト位置: {text_position}")
-        print(f"  前文字列: '{before_string}'")
-        print(f"  後文字列: '{after_string}'")
-        
         # サイト設定を更新
         SITE_CONFIGS['webapp_custom']['heading_1'] = {
             'before': before_string,
@@ -1902,15 +2286,7 @@ def configure_from_json_data(json_data):
         after_string = heading_2_rule.get('suffix_text', '').replace('\\n', '\n')
         
         template_tag, id_format, pattern_type, text_position = analyze_heading_structure(tag_string)
-        
-        print(f"[DEBUG] 見出し2設定:")
-        print(f"  元のタグ: {tag_string}")
-        print(f"  テンプレート: {template_tag}")
-        print(f"  IDフォーマット: {id_format}")
-        print(f"  パターンタイプ: {pattern_type}")
-        print(f"  テキスト位置: {text_position}")
-        print(f"  前文字列: '{before_string}'")
-        print(f"  後文字列: '{after_string}'")
+
         
         # サイト設定を更新
         SITE_CONFIGS['webapp_custom']['h4_template'] = template_tag
@@ -1958,36 +2334,52 @@ def configure_from_json_data(json_data):
             else:
                 # IDなしの場合はデフォルト
                 ID_PATTERNS['link_item_format'] = 'heading-{main_number}-{sub_number}'
-            
-            print(f"[DEBUG] リンク項目IDフォーマット設定: {ID_PATTERNS['link_item_format']}")
         else:
             # 中見出しにIDがない場合はデフォルト
             ID_PATTERNS['link_item_format'] = 'heading-{main_number}-{sub_number}'
-            print(f"[DEBUG] リンク項目IDフォーマット設定: デフォルト")
     
     # テーブルの設定
     if table_rule:
-        tag_string = table_rule.get('tag', '')
-        print(f"[DEBUG] テーブル設定:")
-        print(f"  元のタグ: {tag_string}")
-        
-        # テーブルテンプレートを設定
-        if tag_string:
-            HTML_TAGS['table_template'] = tag_string
-            print(f"[DEBUG] テーブルテンプレート設定: {tag_string}")
-        # tr, td, thのテンプレートも抽出
+        # 個別のテーブルタグを取得
+        table_tag = table_rule.get('table_tag', '')
+        tbody_tag = table_rule.get('tbody_tag', '')
         tr_tag = table_rule.get('tr_tag', '')
-        td_tag = table_rule.get('td_tag', '')
         th_tag = table_rule.get('th_tag', '')
+        td_tag = table_rule.get('td_tag', '')
+        
+        # HTML_TAGSに設定
+        if table_tag:
+            HTML_TAGS['table_tag'] = table_tag
+        if tbody_tag:
+            HTML_TAGS['tbody_tag'] = tbody_tag
         if tr_tag:
+            HTML_TAGS['tr_tag'] = tr_tag
             HTML_TAGS['table_row_template'] = tr_tag
-            print(f"[DEBUG] trテンプレート設定: {tr_tag}")
-        if td_tag:
-            HTML_TAGS['table_cell_td_template'] = td_tag
-            print(f"[DEBUG] tdテンプレート設定: {td_tag}")
         if th_tag:
+            HTML_TAGS['th_tag'] = th_tag
             HTML_TAGS['table_cell_th_template'] = th_tag
-            print(f"[DEBUG] thテンプレート設定: {th_tag}")
+        if td_tag:
+            HTML_TAGS['td_tag'] = td_tag
+            HTML_TAGS['table_cell_td_template'] = td_tag
+            
+        # table_templateとtbody_tagからテーブル全体のテンプレートを構築
+        if table_tag and tbody_tag:
+            print(f"【TABLE_CONFIG】元のtable_tag: '{table_tag}'")
+            print(f"【TABLE_CONFIG】元のtbody_tag: '{tbody_tag}'")
+            
+            # table_tagから開始タグのみを抽出
+            table_start_match = re.match(r'(<table[^>]*>)', table_tag)
+            clean_table_start = table_start_match.group(1) if table_start_match else '<table>'
+            
+            print(f"【TABLE_CONFIG】抽出したclean_table_start: '{clean_table_start}'")
+            
+            # tbody_tagを正規化（正しい<tbody>{content}</tbody>形式にする）
+            clean_tbody_tag = '<tbody>{content}</tbody>'
+            
+            # 正しいテンプレートを構築
+            table_template = clean_table_start + clean_tbody_tag + '</table>'
+            print(f"【TABLE_CONFIG】最終テンプレート: '{table_template}'")
+            HTML_TAGS['table_template'] = table_template
     
     # その他のルールからHTML_TAGSを更新
     section_mapping = {
@@ -1999,6 +2391,7 @@ def configure_from_json_data(json_data):
         '外部リンク': 'external_link_template',
         '表': 'table_template',
         '箱内テキスト（中点）': 'div_list_template',
+        '箱内リンクテキスト': 'div_link_list_template',
         '箱内テキスト（番号）': 'div_ordered_list_template',
         '箱内リンクテキスト（中点）': 'div_link_list_template',
         # 追加: tr, td, th
@@ -2026,17 +2419,14 @@ def configure_from_json_data(json_data):
         # 句点分割フラグを設定
         if split_on_period:
             SPLIT_ON_PERIOD_FLAGS[section] = True
-            print(f"[DEBUG] 句点分割フラグ設定: サイト={CURRENT_SITE}, セクション={section} = True")
         
         # ulフラグを設定（テンプレートにulタグが含まれている場合は自動的にON）
         if ul_flag or (tag and '<ul>' in tag):
             UL_FLAGS[section] = True
-            print(f"[DEBUG] ulフラグ設定: サイト={CURRENT_SITE}, セクション={section} = True")
         
         # olフラグを設定（テンプレートにolタグが含まれている場合は自動的にON）
         if ol_flag or (tag and '<ol>' in tag):
             OL_FLAGS[section] = True
-            print(f"[DEBUG] olフラグ設定: サイト={CURRENT_SITE}, セクション={section} = True")
         
         if section in section_mapping:
             # tagの中の「テキスト」を{content}に置換
@@ -2075,9 +2465,7 @@ def configure_from_json_data(json_data):
                 processed_tag = processed_tag.strip()
             
             HTML_TAGS[section_mapping[section]] = processed_tag
-            print(f"[DEBUG] {section} → {section_mapping[section]}: {processed_tag}")
     # ルールループの最後にUL_FLAGSの内容を出力
-    print(f"[DEBUG] UL_FLAGS: {UL_FLAGS}")
     
     # 現在のサイトをwebapp_customに設定
     CURRENT_SITE = 'webapp_custom'
@@ -2104,9 +2492,12 @@ def generate_heading_id_advanced(level, main_number, sub_number=None, single_cou
         format_str = site_config['heading_2_format']
         if not format_str:
             return ""
-        if site_config.get('heading_2_single_counter', False):
-            return format_str.format(number=single_counter if single_counter is not None else sub_number)
+        # フォーマット指定子を確認して適切なパラメータを渡す
+        if '{number}' in format_str:
+            # 単一数字形式（例：text{number}）
+            return format_str.format(number=sub_number)
         else:
+            # 複数数字形式（例：heading-{main_number}-{sub_number}）
             return format_str.format(main_number=main_number, sub_number=sub_number)
     elif level == 4:
         # 小見出し: section{main_number}-{sub_number}-{sub_sub_number}
@@ -2125,12 +2516,9 @@ def test_json_config_parsing(json_data):
     # サイト基本情報
     site_name = json_data.get('name', 'Unknown Site')
     site_url = json_data.get('url', 'unknown')
-    print(f"サイト名: {site_name}")
-    print(f"サイトURL: {site_url}")
     
     # 変換設定の確認
     conversion_settings = json_data.get('conversion_settings', [])
-    print(f"変換設定数: {len(conversion_settings)}")
     
     if not conversion_settings:
         print("ERROR: conversion_settingsが見つかりません")
@@ -2169,26 +2557,17 @@ def test_json_config_parsing(json_data):
         prefix_text = rule.get('prefix_text', '').replace('\\n', '\n')
         suffix_text = rule.get('suffix_text', '').replace('\\n', '\n')
         
-        print(f"  元のタグ: {tag_string}")
-        print(f"  前文字列: '{prefix_text}'")
-        print(f"  後文字列: '{suffix_text}'")
-        
         # 高度な解析を実行
         template_tag, id_format, pattern_type = analyze_id_pattern_advanced(tag_string)
-        
-        print(f"  解析後テンプレート: {template_tag}")
-        print(f"  IDフォーマット: {id_format}")
-        print(f"  パターンタイプ: {pattern_type}")
+
         
         # サンプルID生成テスト
         if id_format:
             try:
                 if pattern_type == "double":
                     sample_id = id_format.format(main_number=1, sub_number=2)
-                    print(f"  サンプルID(1-2): {sample_id}")
                 elif pattern_type == "single":
                     sample_id = id_format.format(number=5)
-                    print(f"  サンプルID(5): {sample_id}")
                 else:
                     print(f"  サンプルID: (IDなし)")
             except Exception as e:
@@ -2204,99 +2583,350 @@ def test_json_config_parsing(json_data):
             if rule.get('active', False) and rule.get('section') == section:
                 tag = rule.get('tag', '')
                 processed_tag = tag.replace('テキスト', '{content}')
-                print(f"{section}: {processed_tag}")
                 break
     
     print("\n=== テスト完了 ===")
 
-def process_bullet_list_items(items, list_template):
+def process_bullet_list_items(items, list_template, use_bullet_points=True):
     """
-    各行の先頭に「・」がある場合のみliタグで囲み、それ以外はliタグで囲まない。
-    divやulタグはlist_templateの内容に従う。
+    箱内テキスト（中点）や箱内リンクテキスト（中点）用リスト生成。
+    JSONデータの設定項目を参照し、中点除去フラグに基づいて処理する。
     Args:
         items (list): テキスト項目のリスト
         list_template (str): JSONから取得したリストのHTMLテンプレート
+        use_bullet_points (bool): 中点除去フラグ（True=除去、False=保持）
     Returns:
         str: 適切なHTMLリスト構造
     """
-    print("【DEBUG】process_bullet_list_items関数が呼び出されました")
-    
-    if not items or not list_template:
+    print("【ULDEBUG】process_bullet_list_items関数が呼び出されました")
+    print(f"【ULDEBUG】items: {items}")
+    print(f"【ULDEBUG】list_template: {list_template}")
+
+    if not items:
         return ""
 
-    # デバッグ出力
-    print(f"[DEBUG] process_bullet_list_items 呼び出し:")
-    print(f"[DEBUG] items: {items}")
-    print(f"[DEBUG] list_template: {list_template}")
+    # ルールから設定項目を優先順位付きで取得
+    bullet_rule = None
+    link_rule = None
+    global rules, global_link_counter
+    if 'rules' in globals() and rules:
+        # 箱内テキスト（中点）の取得（フォールバック: 箱の枠）
+        for section_name in ['箱内テキスト（中点）', '箱の枠']:
+            bullet_rule = next((r for r in rules if r.get('active', False) and r.get('section') == section_name), None)
+            if bullet_rule:
+                print(f"【process_bullet_list】{section_name}ルールを使用（箱内テキスト）")
+                break
+        
+        # 箱内リンクテキスト（中点）の取得（フォールバック: 箱内リンクテキスト → 箱の枠）
+        for section_name in ['箱内リンクテキスト（中点）', '箱内リンクテキスト', '箱の枠']:
+            link_rule = next((r for r in rules if r.get('active', False) and r.get('section') == section_name), None)
+            if link_rule:
+                print(f"【process_bullet_list】{section_name}ルールを使用（箱内リンクテキスト）")
+                break
 
-    import re
+    # 先頭が中点かどうかを判定し、適切なルールを選択
+    has_bullet_points = any(item.strip().startswith('・') for item in items)
     
-    # 罫線内のテキストを処理
-    li_items = []
+    # リンク要素があるかどうかを判定（初期判定のため項目内容のみをチェック）
+    has_links = any('<a href=' in item for item in items)
+    
+    # 適切なルールを選択
+    print(f"【ULDEBUG】has_links: {has_links}, link_rule: {link_rule is not None}, bullet_rule: {bullet_rule is not None}")
+    if has_links and link_rule:
+        current_rule = link_rule
+        print("【ULDEBUG】箱内リンクテキスト（中点）ルールを使用")
+    elif bullet_rule:
+        current_rule = bullet_rule
+        print("【ULDEBUG】箱内テキスト（中点）ルールを使用")
+    else:
+        current_rule = None
+        print("【ULDEBUG】デフォルト処理を使用")
+
+    # 前後の文字列を取得
+    prefix = current_rule.get('prefix_text', '').replace('\\n', '\n') if current_rule else ''
+    suffix = current_rule.get('suffix_text', '').replace('\\n', '\n') if current_rule else ''
+    tag = current_rule.get('tag', '') if current_rule else ''
+    
+    print(f"【ULDEBUG】設定値 - prefix: {repr(prefix)}")
+    print(f"【ULDEBUG】設定値 - suffix: {repr(suffix)}")
+    print(f"【ULDEBUG】設定値 - tag: {repr(tag)}")
+    
+    # tagが空の場合はデフォルトテンプレートを使用
+    if not tag:
+        if has_links:
+            tag = HTML_TAGS.get('div_link_list_template', '<li><span style="text-decoration: underline; color: #56a0d6;"><a href="#text1">テキスト</a></span></li>')
+        else:
+            tag = HTML_TAGS.get('div_list_template', '<li>テキスト</li>')
+        print(f"【DEBUG】デフォルトテンプレートを使用: {tag}")
+
+    # 項目を処理
+    processed_items = []
     for item in items:
         item = item.strip()
         if not item:
             continue
+        # use_bullet_pointsフラグに基づいて中点除去を制御
+        if use_bullet_points and item.startswith('・'):
+            # 中点除去ONかつ中点がある場合：中点を除去
+            item = item.lstrip('・　').strip()
+            print(f"【DEBUG】中点除去: {item}")
+        # 中点除去OFFの場合は中点をそのまま保持
+        processed_items.append(item)
+
+    # tagテンプレートから1行分のテンプレートを抽出
+    item_template = tag
+    li_match = re.search(r'(<li[\s\S]*?</li>)', tag)
+    if li_match:
+        item_template = li_match.group(1)
+
+    # hrefの数字部分を昇順にソートするための処理
+    print(f"【ULDEBUG】数字置換処理 - has_links: {has_links}, href in template: {'href=' in item_template}")
+    if has_links and 'href=' in item_template:
+        print(f"【ULDEBUG】元のitem_template: {item_template}")
+        # href内の数字を{idx}に置換
+        item_template = re.sub(r'(href=["\'].*?)(\d+)(["\'])', r'\1{idx}\3', item_template)
+        print(f"【ULDEBUG】置換後のitem_template: {item_template}")
+        
+        # 各項目にグローバルカウンターを使用してHTMLを生成
+        formatted_items = []
+        global global_link_counter
+        
+        print(f"【ULDEBUG】グローバルカウンター取得: {global_link_counter}")
+        
+        # 現在の大見出し番号を取得（実行時点での番号を記録）
+        global major_heading_counter
+        
+        # 箱内リンクテキスト（中点）の場合は現在の大見出し番号を使用
+        if (current_rule and current_rule.get('section') == '箱内リンクテキスト（中点）'):
+            current_major = major_heading_counter
+            print(f"【process_bullet_list修正】箱内リンクテキスト（中点）で現在の大見出し番号を使用: {current_major}")
+        else:
+            current_major = major_heading_counter
+            print(f"【ULDEBUG】関数実行時の大見出し番号: {current_major}")
+        
+        # この関数が呼ばれた時点での大見出し番号を記録（クロージャで使用）
+        recorded_major_counter = current_major
+        
+        for local_idx, item in enumerate(processed_items, 1):
+            print(f"【ULDEBUG】処理中 - local_idx: {local_idx}, 大見出し: {recorded_major_counter}, item: {item}")
             
-        # 既にliタグが付いている場合はそのまま使用
-        if item.startswith('<li>') and item.endswith('</li>'):
-            li_items.append(item)
-        # 「・」で始まる場合は中点を除去してliタグで囲む
-        elif item.startswith('・'):
-            # 中点を除去してテキストを取得
-            clean_text = item.lstrip("・　 ").strip()
-            li_items.append(f'<li>{clean_text}</li>')
-        else:
-            # 「・」で始まらない場合はそのまま追加
-            li_items.append(item)
-
-    print(f"[DEBUG] li_items: {li_items}")
-
-    # list_templateから罫線のdivタグを抽出
-    div_start_match = re.search(r'<div[^>]*style="[^"]*background:#ffffff;border:1px solid #cccccc;padding:5px 10px;"[^>]*>', list_template)
-    if div_start_match:
-        div_start = div_start_match.group(0)
-        # 罫線のdivタグの開始部分を取得
-        outer_start = list_template.split(div_start)[0]
-        # 罫線のdivタグの終了部分を取得
-        outer_end = '</div>'
-        
-        # ulフラグをチェックしてulタグを追加するかどうかを判定
-        ul_flag_enabled = UL_FLAGS.get('箱内テキスト（中点）', False)
-        ol_flag_enabled = OL_FLAGS.get('箱内テキスト（中点）', False)
-        
-        if li_items:
-            if ul_flag_enabled:
-                # ulフラグがONの場合はli_itemsの前後にulタグを挿入
-                li_content = '\n'.join(li_items)
-                li_content = f'<ul>\n{li_content}\n</ul>'
-                result = f"{outer_start}{div_start}\n{li_content}\n{outer_end}"
-            elif ol_flag_enabled:
-                ol_content = '\n'.join(li_items)
-                result = f"{outer_start}{div_start}\n<ol>\n{ol_content}\n</ol>\n{outer_end}"
-            else:
-                li_content = '\n'.join(li_items)
-                result = f"{outer_start}{div_start}\n{li_content}\n{outer_end}"
-        else:
-            result = f"{outer_start}{div_start}\n{outer_end}"
+            # hrefを見出し番号ベースで置換
+            formatted_html = item_template.replace('テキスト', item)
+            if '{content}' in formatted_html:
+                formatted_html = formatted_html.replace('{content}', item)
+            
+            # {idx}の置換は一旦スキップして、直接href置換を行う
+            if 'href=' in formatted_html:
+                def replace_href_with_heading_numbers(match):
+                    quote_char = match.group(1)
+                    href_content = match.group(2)
+                    
+                    # hrefのパターンを判定して適切な番号を使用
+                    # href内の数字の塊の数で大見出し番号の有無を判定
+                    numbers = re.findall(r'\d+', href_content)
+                    is_no_heading_number_site = len(numbers) <= 1
+                    
+                    if is_no_heading_number_site:
+                        # 大見出し番号がないサイト（text1, text2等）の場合はグローバルカウンターを使用
+                        global global_link_counter
+                        new_href_content = re.sub(r'\d+', str(global_link_counter), href_content, count=1)
+                        global_link_counter += 1
+                        print(f"【process_bullet_list】数字の塊1つ（大見出し番号なし）でグローバルカウンター使用: {global_link_counter-1} → 次回{global_link_counter}")
+                    elif '-' in href_content and href_content.count('-') >= 2:
+                        parts = href_content.split('-')
+                        if len(parts) >= 3:
+                            parts[-2] = str(recorded_major_counter)  # 記録された大見出し番号
+                            parts[-1] = str(local_idx)              # 中見出し番号
+                            new_href_content = '-'.join(parts)
+                        else:
+                            new_href_content = href_content
+                    else:
+                        # 数字の塊が2つ以上の場合は従来の処理
+                        if len(numbers) >= 2:
+                            new_href_content = re.sub(r'\d+', str(recorded_major_counter), href_content, count=1)
+                            new_href_content = re.sub(r'\d+', str(local_idx), new_href_content, count=1)
+                        else:
+                            # 数字が1つしかない場合は、ローカルインデックスを使用
+                            new_href_content = re.sub(r'\d+', str(local_idx), href_content, count=1)
+                    
+                    return f'href={quote_char}{new_href_content}{quote_char}'
+                
+                formatted_html = re.sub(r'href=(["\'])([^"\']*)\1', replace_href_with_heading_numbers, formatted_html)
+            
+            print(f"【ULDEBUG】formatted_html: {formatted_html}")
+            formatted_items.append(formatted_html)
     else:
-        # 罫線のdivタグが見つからない場合は従来の処理
-        if '{content}' in list_template:
-            list_content = '\n'.join(li_items)
-            # ulフラグがONならulで囲む
-            ul_flag_enabled = UL_FLAGS.get('箱内テキスト（中点）', False)
-            if ul_flag_enabled:
-                list_content = f'<ul>\n{list_content}\n</ul>'
-            result = list_template.replace('{content}', list_content)
-        else:
-            result = '\n'.join(li_items)
+        # 通常のテキスト処理
+        formatted_items = []
+        for item in processed_items:
+            formatted_html = item_template.replace('テキスト', item)
+            if '{content}' in formatted_html:
+                formatted_html = formatted_html.replace('{content}', item)
+            formatted_items.append(formatted_html)
 
-    print(f"[DEBUG] 結果: {result}")
-    return result
+    # 最終的なHTMLを構築
+    print(f"【ULDEBUG】li_match: {li_match is not None}")
+    print(f"【ULDEBUG】formatted_items: {formatted_items}")
+    
+    if li_match:
+        # li要素がある場合は、テンプレートの構造を保持して内容を置換
+        content = '\n'.join(formatted_items)
+        print(f"【ULDEBUG】結合されたcontent: {repr(content)}")
+        # tagテンプレート内のli要素部分を置換
+        result = re.sub(r'<li[\s\S]*?</li>', content, tag, count=1)
+        print(f"【ULDEBUG】置換後のresult: {repr(result)}")
+    else:
+        # li要素がない場合は単純に結合
+        result = '\n'.join(formatted_items)
+        print(f"【ULDEBUG】単純結合のresult: {repr(result)}")
 
-def process_numbered_list_items(items, list_template):
+    # 前後の文字列を付与
+    final_result = f"{prefix}{result}{suffix}"
+    print(f"【ULDEBUG】最終結果: {repr(final_result)}")
+    return final_result
+
+def generate_box_link_list_from_items(items, rule, major_heading_number, use_bullet_points=True, headings=None):
+    """
+    蓄積された箱内リンクテキストをまとめて処理してHTMLを生成する
+    Args:
+        items (list): 蓄積されたテキスト項目のリスト
+        rule (dict): 適用するルール設定
+        major_heading_number (int): 大見出し番号
+        use_bullet_points (bool): 中点除去フラグ
+        headings (list): 見出しのリスト（ID参照用）
+    Returns:
+        str: 生成されたHTML
+    """
+    """
+    蓄積された箱内リンクテキストをまとめて処理してHTMLを生成する
+    Args:
+        items (list): 蓄積されたテキスト項目のリスト
+        rule (dict): 適用するルール設定
+        major_heading_number (int): 大見出し番号
+        use_bullet_points (bool): 中点除去フラグ
+    Returns:
+        str: 生成されたHTML
+    """
+    if not items or not rule:
+        return ""
+    
+    print(f"【まとめて処理】箱内リンクテキスト {len(items)}項目をまとめて処理開始")
+    
+    prefix = rule.get('prefix_text', '').replace('\\n', '\n')
+    suffix = rule.get('suffix_text', '').replace('\\n', '\n')
+    tag = rule.get('tag', '')
+    
+    # 1行分のテンプレート
+    item_template = tag
+    
+    # hrefの数字部分を昇順にする
+    formatted_items = []
+    print(f"【まとめて処理】item_template: {item_template}")
+    print(f"【まとめて処理】使用する大見出し番号: {major_heading_number}")
+    
+    for local_idx, line in enumerate(items, 1):
+        print(f"【まとめて処理】処理中 - local_idx: {local_idx}, line: {line}")
+        
+        # テキストを置換
+        link_html = item_template.replace('テキスト', line)
+        if '{content}' in link_html:
+            link_html = link_html.replace('{content}', line)
+        
+        # hrefの数字を昇順にする（href属性内のみ）
+        if 'href=' in link_html:
+            print(f"【まとめて処理】href属性を処理、local_idx={local_idx}")
+            
+            def replace_href_number(match):
+                quote_char = match.group(1)
+                href_content = match.group(2)
+                
+                # 渡されたmajor_heading_numberをそのまま使用
+                current_major_number = major_heading_number
+                
+                print(f"【まとめて処理】href置換 - href: {href_content}, 使用する大見出し: {current_major_number}, local_idx: {local_idx}")
+                
+                # 動的プレフィックス処理
+                # ルールのtagからhrefパターンを判定
+                rule_tag = rule.get('tag', '') if rule else ''
+                has_hyphen_pattern = bool(re.search(r'href="[^"]*-\d+-\d+', rule_tag))
+                
+                if has_hyphen_pattern:
+                    # ハイフン有りパターン（#heading-1-1）
+                    regex_match = re.match(r'^#[a-zA-Z]+-\d+-\d+', href_content)
+                    extract_pattern = r'^(#[a-zA-Z]+)-\d+-\d+'
+                    format_template = "{prefix_part}-{major}-{local}"
+                else:
+                    # ハイフン無しパターン（#rtoc1-1）
+                    regex_match = re.match(r'^#[a-zA-Z]+\d+-\d+', href_content)
+                    extract_pattern = r'^(#[a-zA-Z]+)\d+-\d+'
+                    format_template = "{prefix_part}{major}-{local}"
+                
+                print(f"【デバッグ】タグパターン解析: has_hyphen_pattern={has_hyphen_pattern}, rule_tag={rule_tag}")
+                print(f"【デバッグ】正規表現マッチ結果: {href_content} → {regex_match is not None}")
+                
+                if regex_match:
+                    # マッチした場合は、文字列部分を抽出して番号を置換
+                    match_prefix = re.match(extract_pattern, href_content)
+                    if match_prefix:
+                        prefix_part = match_prefix.group(1)  # #rtoc, #heading等の文字列部分
+                        if has_hyphen_pattern:
+                            new_href_content = f"{prefix_part}-{current_major_number}-{local_idx}"
+                        else:
+                            new_href_content = f"{prefix_part}{current_major_number}-{local_idx}"
+                        print(f"【まとめて処理】動的プレフィックス: {prefix_part} → {new_href_content}")
+                    else:
+                        new_href_content = href_content
+                else:
+                    # 罫線内の各リンクに対して、次の中見出し番号を使用
+                    global cumulative_heading_counter
+                    # 最初のリンクの場合のみ、次の中見出し番号を計算
+                    if local_idx == 1:
+                        base_number = cumulative_heading_counter
+                    # 各リンクに連番を割り当て
+                    current_number = base_number + local_idx - 1
+                    # 最後のリンクの場合、累積カウンターを更新
+                    if local_idx == len(items):
+                        cumulative_heading_counter = current_number
+                    # href属性の形式を修正（#を確実に付ける）
+                    new_href_content = f"#text{current_number}"
+                    print(f"【まとめて処理】通常の番号置換: {href_content} → {new_href_content} (開始番号{base_number} + {local_idx - 1} = {current_number})")
+                
+                return f'href={quote_char}{new_href_content}{quote_char}'
+            
+            link_html = re.sub(r'href=(["\'])([^"\']*)\1', replace_href_number, link_html)
+        
+        # 箱内リンクテキスト系の処理を分岐
+        if rule.get('section') == '箱内リンクテキスト（中点）':
+            # 箱内リンクテキスト（中点）の場合は、<li>タグを保持
+            # link_htmlはそのまま使用（<li><a href="...">...</a></li>の形式を維持）
+            pass
+        elif rule.get('section') == '箱内リンクテキスト':
+            # 箱内リンクテキスト（通常）の場合は、<a>タグのみを抽出
+            a_match = re.search(r'(<a[^>]*>.*?</a>)', link_html)
+            if a_match:
+                link_html = a_match.group(1)
+                if local_idx < len(items):  # 最後の要素以外には<br />を追加
+                    link_html += '<br />'
+        
+        formatted_items.append(link_html)
+        print(f"【まとめて処理】local_idx={local_idx}のアイテム完了: {link_html}")
+    
+    # 最終的なHTMLを構築
+    if rule.get('section') == '箱内リンクテキスト':
+        # 箱内リンクテキスト（通常）の場合は、<br />で区切られているので改行なしで結合
+        content = '\n'.join(formatted_items)
+    else:
+        # 箱内リンクテキスト（中点）やその他の場合は通常の改行で結合
+        content = '\n'.join(formatted_items)
+    
+    final_html = f"{prefix}{content}{suffix}"
+    print(f"【まとめて処理】最終的なHTML: {final_html}")
+    return final_html
+
+def process_numbered_list_items(items, list_template, use_bullet_points=True):
     """
     「数字.」から始まるテキスト項目を動的なHTMLリスト構造に変換する
+    箱内テキスト（番号）と箱内リンクテキスト（番号）に対応
     
     Args:
         items (list): 「数字.」から始まるテキスト項目のリスト
@@ -2305,9 +2935,55 @@ def process_numbered_list_items(items, list_template):
     Returns:
         str: 適切なHTMLリスト構造
     """
-    if not items or not list_template:
+    if not items:
         return ""
     
+    # ルールから設定項目を優先順位付きで取得
+    numbered_rule = None
+    numbered_link_rule = None
+    global rules
+    if 'rules' in globals() and rules:
+        # 箱内テキスト（番号）の取得（フォールバック: 箱の枠）
+        for section_name in ['箱内テキスト（番号）', '箱の枠']:
+            numbered_rule = next((r for r in rules if r.get('active', False) and r.get('section') == section_name), None)
+            if numbered_rule:
+                print(f"【process_numbered_list】{section_name}ルールを使用（箱内テキスト番号）")
+                break
+        
+        # 箱内リンクテキスト（番号）の取得（フォールバック: 箱内リンクテキスト → 箱の枠）
+        for section_name in ['箱内リンクテキスト（番号）', '箱内リンクテキスト', '箱の枠']:
+            numbered_link_rule = next((r for r in rules if r.get('active', False) and r.get('section') == section_name), None)
+            if numbered_link_rule:
+                print(f"【process_numbered_list】{section_name}ルールを使用（箱内リンクテキスト番号）")
+                break
+
+    # リンク要素があるかどうかを判定（初期判定のため項目内容のみをチェック）
+    has_links = any('<a href=' in item for item in items)
+    
+    # 適切なルールを選択
+    if has_links and numbered_link_rule:
+        current_rule = numbered_link_rule
+        print("【DEBUG】箱内リンクテキスト（番号）ルールを使用")
+    elif numbered_rule:
+        current_rule = numbered_rule
+        print("【DEBUG】箱内テキスト（番号）ルールを使用")
+    else:
+        current_rule = None
+        print("【DEBUG】デフォルト処理を使用")
+
+    # 前後の文字列を取得
+    prefix = current_rule.get('prefix_text', '').replace('\\n', '\n') if current_rule else ''
+    suffix = current_rule.get('suffix_text', '').replace('\\n', '\n') if current_rule else ''
+    tag = current_rule.get('tag', '') if current_rule else ''
+    
+    # tagが空の場合はデフォルトテンプレートを使用
+    if not tag:
+        if has_links:
+            tag = HTML_TAGS.get('div_link_list_template', '<li><span style="text-decoration: underline; color: #56a0d6;"><a href="#text1">テキスト</a></span></li>')
+        else:
+            tag = HTML_TAGS.get('div_ordered_list_template', '<li>テキスト</li>')
+        print(f"【DEBUG】デフォルトテンプレートを使用: {tag}")
+
     # アイテムから「数字.」を除去してクリーンにする
     clean_items = []
     for item in items:
@@ -2324,13 +3000,13 @@ def process_numbered_list_items(items, list_template):
     
     # テンプレートの解析
     # 「{content}」（JSONから変換済み）または「テキスト」を含む場合はリスト項目として扱う
-    has_content_placeholders = '{content}' in list_template or 'テキスト' in list_template
+    has_content_placeholders = '{content}' in tag or 'テキスト' in tag
     
     if has_content_placeholders:
         # ol/li形式の場合
-        if '<ol>' in list_template and '<li>' in list_template:
+        if '<ol>' in tag and '<li>' in tag:
             # 複数のテンプレート行がある場合は実際のアイテム数に調整
-            li_matches = re.findall(r'<li[^>]*>.*?</li>', list_template, re.DOTALL)
+            li_matches = re.findall(r'<li[^>]*>.*?</li>', tag, re.DOTALL)
             
             if li_matches and len(li_matches) > 1:
                 # 複数のliタグがある場合、最初のliをテンプレートとして使用
@@ -2340,15 +3016,15 @@ def process_numbered_list_items(items, list_template):
                     li_content = li_content_match.group(1).strip()
                     
                     # 外側の構造を抽出
-                    outer_start = list_template.split('<ol')[0] if '<ol' in list_template else ''
-                    ol_start_match = re.search(r'<ol[^>]*>', list_template)
+                    outer_start = tag.split('<ol')[0] if '<ol' in tag else ''
+                    ol_start_match = re.search(r'<ol[^>]*>', tag)
                     ol_start = ol_start_match.group(0) if ol_start_match else '<ol>'
-                    outer_end_match = re.search(r'</ol>(.*?)$', list_template, re.DOTALL)
+                    outer_end_match = re.search(r'</ol>(.*?)$', tag, re.DOTALL)
                     outer_end = outer_end_match.group(1) if outer_end_match else ''
                     
-                    # リスト項目を生成
+                    # リスト項目を生成（hrefの数字をソート）
                     list_content = ""
-                    for clean_item in clean_items:
+                    for idx, clean_item in enumerate(clean_items, 1):
                         # 既にliタグが付いている場合はそのまま使用
                         if clean_item.startswith('<li>') and clean_item.endswith('</li>'):
                             formatted_li = clean_item
@@ -2356,9 +3032,17 @@ def process_numbered_list_items(items, list_template):
                         elif '<a href=' in clean_item:
                             formatted_li = f'<li>{clean_item}</li>'
                         elif '{content}' in li_content:
-                            formatted_li = f'<li>{li_content.replace("{content}", clean_item)}</li>'
+                            # hrefの数字を昇順にする
+                            item_content = li_content.replace("{content}", clean_item)
+                            if has_links and 'href=' in item_content:
+                                item_content = re.sub(r'(href=["\'].*?)(\d+)(["\'])', rf'\g<1>{idx}\g<3>', item_content)
+                            formatted_li = f'<li>{item_content}</li>'
                         elif 'テキスト' in li_content:
-                            formatted_li = f'<li>{li_content.replace("テキスト", clean_item)}</li>'
+                            # hrefの数字を昇順にする
+                            item_content = li_content.replace("テキスト", clean_item)
+                            if has_links and 'href=' in item_content:
+                                item_content = re.sub(r'(href=["\'].*?)(\d+)(["\'])', rf'\g<1>{idx}\g<3>', item_content)
+                            formatted_li = f'<li>{item_content}</li>'
                         else:
                             formatted_li = f'<li>{clean_item}</li>'
                         list_content += "\t" + formatted_li + "\n"
@@ -2368,16 +3052,16 @@ def process_numbered_list_items(items, list_template):
             
             # 単一のliタグまたは通常の処理
             # ol開始タグと終了タグを抽出
-            ol_start_match = re.search(r'<ol[^>]*>', list_template)
+            ol_start_match = re.search(r'<ol[^>]*>', tag)
             ol_start = ol_start_match.group(0) if ol_start_match else '<ol>'
             
             # 外側のdiv/dl構造を抽出
-            outer_start = list_template.split('<ol')[0] if '<ol' in list_template else ''
-            outer_end_match = re.search(r'</ol>(.*?)$', list_template, re.DOTALL)
+            outer_start = tag.split('<ol')[0] if '<ol' in tag else ''
+            outer_end_match = re.search(r'</ol>(.*?)$', tag, re.DOTALL)
             outer_end = outer_end_match.group(1) if outer_end_match else ''
             
             # li要素のテンプレートを抽出
-            li_pattern = re.search(r'<li[^>]*>(.*?)</li>', list_template, re.DOTALL)
+            li_pattern = re.search(r'<li[^>]*>(.*?)</li>', tag, re.DOTALL)
             if li_pattern:
                 li_content = li_pattern.group(1).strip()
                 # 既に{content}になっている場合はそのまま、テキストの場合は置換
@@ -2390,9 +3074,9 @@ def process_numbered_list_items(items, list_template):
             else:
                 li_template = '<li>{content}</li>'
             
-            # リスト項目を生成
+            # リスト項目を生成（hrefの数字をソート）
             list_content = ""
-            for clean_item in clean_items:
+            for idx, clean_item in enumerate(clean_items, 1):
                 # 既にliタグが付いている場合はそのまま使用
                 if clean_item.startswith('<li>') and clean_item.endswith('</li>'):
                     list_content += "\t" + clean_item + "\n"
@@ -2400,7 +3084,11 @@ def process_numbered_list_items(items, list_template):
                 elif '<a href=' in clean_item:
                     list_content += "\t" + f'<li>{clean_item}</li>' + "\n"
                 else:
-                    list_content += "\t" + li_template.format(content=clean_item) + "\n"
+                    # hrefの数字を昇順にする
+                    item_content = li_template.format(content=clean_item)
+                    if has_links and 'href=' in item_content:
+                        item_content = re.sub(r'(href=["\'].*?)(\d+)(["\'])', rf'\g<1>{idx}\g<3>', item_content)
+                    list_content += "\t" + item_content + "\n"
             
             # ulフラグをチェックしてulタグを追加するかどうかを判定
             ul_flag_enabled = UL_FLAGS.get('箱内テキスト（番号）', False)
@@ -2416,23 +3104,24 @@ def process_numbered_list_items(items, list_template):
                 # フラグがOFFの場合はliタグをそのまま配置
                 result = f"{outer_start}{list_content}{outer_end}"
             
-            return result
+            # 前後の文字列を付与
+            return f"{prefix}{result}{suffix}"
         
         # span形式の場合（サイト１のような形式）
-        elif '<span' in list_template and not ('<ol>' in list_template or '<p>' in list_template or '<dl>' in list_template):
+        elif '<span' in tag and not ('<ol>' in tag or '<p>' in tag or '<dl>' in tag):
             # span要素のテンプレートを解析
-            span_pattern = re.search(r'<span[^>]*>(.*?)</span>', list_template, re.DOTALL)
+            span_pattern = re.search(r'<span[^>]*>(.*?)</span>', tag, re.DOTALL)
             if span_pattern:
                 span_content = span_pattern.group(1)
                 
                 # 外側のdiv構造を抽出
-                outer_start_match = re.search(r'^(.*?)<span', list_template, re.DOTALL)
+                outer_start_match = re.search(r'^(.*?)<span', tag, re.DOTALL)
                 outer_start = outer_start_match.group(1) if outer_start_match else ''
-                outer_end_match = re.search(r'</span>(.*?)$', list_template, re.DOTALL)
+                outer_end_match = re.search(r'</span>(.*?)$', tag, re.DOTALL)
                 outer_end = outer_end_match.group(1) if outer_end_match else ''
                 
                 # span要素のテンプレート
-                span_template_match = re.search(r'<span[^>]*>', list_template)
+                span_template_match = re.search(r'<span[^>]*>', tag)
                 span_start = span_template_match.group(0) if span_template_match else '<span>'
                 
                 # リスト項目を生成（数字.付きで）
@@ -2447,23 +3136,23 @@ def process_numbered_list_items(items, list_template):
                     formatted_items.append(f"{span_start}{item_content}</span>")
                 
                 content = '\n    '.join(formatted_items)
-                return f"{outer_start}{content}{outer_end}"
+                return f"{prefix}{outer_start}{content}{outer_end}{suffix}"
         
         # p形式の場合（サイト２のような形式）
-        elif '<p>' in list_template and not ('<ol>' in list_template or '<dl>' in list_template):
+        elif '<p>' in tag and not ('<ol>' in tag or '<dl>' in tag):
             # p要素のテンプレートを解析
-            p_pattern = re.search(r'<p[^>]*>(.*?)</p>', list_template, re.DOTALL)
+            p_pattern = re.search(r'<p[^>]*>(.*?)</p>', tag, re.DOTALL)
             if p_pattern:
                 p_content = p_pattern.group(1)
                 
                 # 外側のdiv構造を抽出
-                outer_start_match = re.search(r'^(.*?)<p', list_template, re.DOTALL)
+                outer_start_match = re.search(r'^(.*?)<p', tag, re.DOTALL)
                 outer_start = outer_start_match.group(1) if outer_start_match else ''
-                outer_end_match = re.search(r'</p>(.*?)$', list_template, re.DOTALL)
+                outer_end_match = re.search(r'</p>(.*?)$', tag, re.DOTALL)
                 outer_end = outer_end_match.group(1) if outer_end_match else ''
                 
                 # p要素のテンプレート
-                p_template_match = re.search(r'<p[^>]*>', list_template)
+                p_template_match = re.search(r'<p[^>]*>', tag)
                 p_start = p_template_match.group(0) if p_template_match else '<p>'
                 
                 # リスト項目を生成（数字.付きで）
@@ -2478,20 +3167,20 @@ def process_numbered_list_items(items, list_template):
                     formatted_items.append(f"{p_start}{item_content}</p>")
                 
                 content = '\n'.join(formatted_items)
-                return f"{outer_start}{content}{outer_end}"
+                return f"{prefix}{outer_start}{content}{outer_end}{suffix}"
         
         # dl/dd形式の場合（サイト３のような形式）
-        elif '<dl>' in list_template and '<dd>' in list_template:
+        elif '<dl>' in tag and '<dd>' in tag:
             # dl構造のテンプレートを解析
-            dd_pattern = re.search(r'<dd[^>]*[^>]*>(.*?)</dd>', list_template, re.DOTALL)
+            dd_pattern = re.search(r'<dd[^>]*[^>]*>(.*?)</dd>', tag, re.DOTALL)
             if dd_pattern:
                 dd_content = dd_pattern.group(1)
                 
                 # 「数字.テキスト<br>」の繰り返し形式の場合
                 if '<br>' in dd_content or '<br />' in dd_content:
                     # dl開始部分を抽出
-                    dl_start = list_template.split('<dd')[0] + '<dd' + list_template.split('<dd')[1].split('>')[0] + '>'
-                    dl_end = '</dd>' + list_template.split('</dd>')[-1] if '</dd>' in list_template else '</dd>'
+                    dl_start = tag.split('<dd')[0] + '<dd' + tag.split('<dd')[1].split('>')[0] + '>'
+                    dl_end = '</dd>' + tag.split('</dd>')[-1] if '</dd>' in tag else '</dd>'
                     
                     # リスト項目を生成（数字.付きで<br>区切り）
                     formatted_items = []
@@ -2499,13 +3188,13 @@ def process_numbered_list_items(items, list_template):
                         formatted_items.append(f'{i}.{clean_item}')
                     
                     content = '<br>\n\t\t'.join(formatted_items)
-                    return f"{dl_start}\n\t\t{content}\n\t{dl_end}"
+                    return f"{prefix}{dl_start}\n\t\t{content}\n\t{dl_end}{suffix}"
             
         # その他のカスタム形式
         else:
             # 一般的な処理（divのみなど）
             # {content}またはテキストを適切に置換
-            result = list_template
+            result = tag
             
             # 全ての項目を番号付きで改行で結合
             numbered_items = []
@@ -2518,55 +3207,13 @@ def process_numbered_list_items(items, list_template):
             elif 'テキスト' in result:
                 result = result.replace('テキスト', combined_content)
             
-            return result
+            return f"{prefix}{result}{suffix}"
     else:
         # プレースホルダーがない場合は、項目をそのまま結合
         all_items = '\n'.join(items)
-        return f'<div>{all_items}</div>'
+        return f"{prefix}<div>{all_items}</div>{suffix}"
 
-def generate_numbered_link_list_from_items(items):
-    """番号付きリンクリスト項目からリンクリストを生成"""
-    if not items:
-        return ""
-    
-    # 箱内リンクテキスト（番号）のテンプレートを取得
-    template = HTML_TAGS.get('div_link_list_template', '<div class="solution" style="padding:10px 15px;border:1px solid #000000;"><li><span style="text-decoration: underline; color: #56a0d6;"><a href="#text1">{content}</a></span></li></div>')
-    
-    # アイテムから「数字.」を除去してクリーンにする（既にクリーンな状態だが念のため）
-    clean_items = []
-    for item in items:
-        # 既に<a>タグが含まれている場合は、<span>タグで囲む
-        if '<a href=' in item:
-            # テンプレートから<span>タグの情報を抽出
-            span_match = re.search(r'<span[^>]*style="[^"]*"[^>]*>', template)
-            if span_match:
-                span_tag = span_match.group(0)
-                # <a>タグを<span>タグで囲む
-                wrapped_item = f'<li>{span_tag}{item}</span></li>'
-                clean_items.append(wrapped_item)
-            else:
-                # <span>タグが見つからない場合は通常の処理
-                clean_items.append(f'<li>{item}</li>')
-        else:
-            # 「数字.」で始まる場合は除去
-            clean_item = item.strip()
-            match = re.match(r'^\d+\.\s*(.*)', clean_item)
-            if match:
-                clean_item = match.group(1)
-            clean_items.append(f'<li>{clean_item}</li>')
-    
-    # テンプレートから外側のdiv構造を抽出
-    div_match = re.search(r'<div[^>]*style="[^"]*"[^>]*>', template)
-    if div_match:
-        div_start = div_match.group(0)
-        # 外側のdiv構造を構築
-        li_content = '\n'.join(clean_items)
-        result = f"{div_start}\n{li_content}\n</div>"
-        return result
-    else:
-        # divタグが見つからない場合は通常の処理
-        li_content = '\n'.join(clean_items)
-        return f"<div>\n{li_content}\n</div>"
+
 
 def load_json_config_from_files(config_files=None):
     """
@@ -2616,7 +3263,6 @@ def split_p_tags_on_period(html_content):
         str: 句点で分割されたHTMLコンテンツ
     """
 
-    import re
     # 分割フラグがFalseなら何もせずそのまま返す
     if not SPLIT_ON_PERIOD_FLAGS.get('テキスト', False):
         return html_content
@@ -2631,45 +3277,29 @@ def split_p_tags_on_period(html_content):
         p_start = match.group(0)[:match.group(0).find('>') + 1]  # <p...>部分
         p_end = '</p>'
         content = match.group(1)
-        print("=== split_p_content が呼び出されました ===")
-        print("元のcontent:", content)
-        print("contentの長さ:", len(content))
         flag=0
         
         # HTMLタグが含まれている場合は処理をスキップ（安全のため）
         if '<' in content and '>' in content:
-            print("HTMLタグが含まれています。特殊処理を実行します。")
             original_content = content
             
             if '。<strong>' in content or '。<span' in content or '。</strong>' in content or '。</span>' in content:
-                print("句点とHTMLタグの組み合わせを検出しました")
                 content = content.replace('。<strong>', '。</p><p><strong>').replace('</strong><strong>', '').replace('。</strong></span>', '。</strong></span></p><p>').replace('。<span', '。</p><p><span').replace('。</span>', '。</span></p><p>').replace('<p></p>','')
-                print("HTMLタグ処理後のcontent:", content)
                 flag=1
             if ('。<strong>' in content or '。<span' in content or '。</strong>' in content or '。</span>' in content) and ('。</strong></span>' not in content):
-                print("句点とstrongタグの組み合わせを検出しました")
                 content = content.replace('。</strong>', '。</strong></p><p>')
-                print("strongタグ処理後のcontent:", content)
                 flag=1
             if flag==0:
-                print("通常の句点分割を実行します")
                 content = content.replace('。','。</p><p>').replace('<p></p>','')
-                print("通常処理後のcontent:", content)
             # 修正されたコンテンツをpタグで囲んで返す
             if content == '':
-                print("contentが空になりました")
                 return ''
-            print("最終的なcontent:", content)
             result = f"{p_start}{content}{p_end}"
             result = result.replace('<p></p>','')
-            print("返却するHTML:", result)
             return result
         
         # 句点で分割
-        print("HTMLタグが含まれていません。通常の句点分割を実行します。")
         sentences = content.split('。')
-        print("分割された文の数:", len(sentences))
-        print("分割された文:", sentences)
         
         # 空文字列やスペースのみの文を除去し、句点を復元
         clean_sentences = []
@@ -2682,15 +3312,11 @@ def split_p_tags_on_period(html_content):
                 else:
                     clean_sentences.append(sentence)
         
-        print("クリーンアップ後の文:", clean_sentences)
-        
         # 分割された文が1つ以下の場合は元のpタグをそのまま返す
         if len(clean_sentences) <= 1:
-            print("分割された文が1つ以下です。元のpタグをそのまま返します。")
             return match.group(0)
         
         # 複数の文がある場合、各文をpタグで囲む
-        print("複数の文があります。各文をpタグで囲みます。")
         result = ""
         for i, sentence in enumerate(clean_sentences):
             if i == 0:
@@ -2704,10 +3330,7 @@ def split_p_tags_on_period(html_content):
         return result
     
     # pタグ内の句点で分割を実行
-    print("=== pタグの検索と置換を開始します ===")
     processed_html = p_pattern.sub(split_p_content, html_content)
-    print("=== 処理完了 ===")
-    print("処理後のHTML（最初の500文字）:", processed_html[:500])
     
     return processed_html
 
@@ -3061,6 +3684,33 @@ def generate_heading_html_simple(level, heading_id, text_content, heading_number
         else:
             return f'<h4 class="zm__text-body __basic" style="color: #2299e1;font-weight: 700;font-size: 1.1em;">{text_content}</h4>'
     return text_content
+
+def replace_variables_in_html(html_content, variable_values):
+    """
+    HTMLコンテンツ内の{変数名}をvariable_valuesの値で置換する
+    
+    Args:
+        html_content (str): 置換対象のHTMLコンテンツ
+        variable_values (dict): 変数名と値の辞書
+        
+    Returns:
+        str: 変数が置換されたHTMLコンテンツ
+    """
+    if not variable_values:
+        return html_content
+    
+    # {変数名}のパターンを検索して置換
+    pattern = r'\{([^}]+)\}'
+    
+    def replace_match(match):
+        variable_name = match.group(1)
+        if variable_name in variable_values:
+            return str(variable_values[variable_name])
+        else:
+            # 変数が見つからない場合は元の文字列をそのまま返す
+            return match.group(0)
+    
+    return re.sub(pattern, replace_match, html_content)
 
 if __name__ == "__main__":
     input_file = "document.xml"
