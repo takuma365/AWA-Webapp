@@ -182,10 +182,7 @@ const GenerationScreen: React.FC = () => {
     document.body.removeChild(input);
   };
 
-  const handleHtmlDownload = () => {
-    // Your logic here
-    console.log('Generate button clicked');
-  };
+
 
   return (
     <div className="min-h-screen bg-gray-100 pt-16 pb-8 flex justify-center">
@@ -223,7 +220,6 @@ const GenerationScreen: React.FC = () => {
             disabled={isUploading}
           />
           <Button name="HTMLを生成" onClick={handleGenerateClick}/>
-          <Button name="HTMLをダウンロード" onClick={handleHtmlDownload}/>
         </div>
       </div>
     </div>

@@ -24,6 +24,7 @@ type SectionFields = {
   tr_tag?: string;
   th_tag?: string;
   td_tag?: string;
+  table_convert_bullets_to_ul?: string; // 追加: 表で中点をul/liタグに変換するかどうか
 };
 
 const selfClosingTags = new Set([
@@ -208,6 +209,7 @@ const SettingsScreen = () => {
           tr_tag: rule.tr_tag || '',
           th_tag: rule.th_tag || '',
           td_tag: rule.td_tag || '',
+          table_convert_bullets_to_ul: rule.table_convert_bullets_to_ul ? 'true' : '',
         };
       });
       setFormData((prev) => ({ ...prev, [activeTabId]: newFormData }));
@@ -589,6 +591,7 @@ const SettingsScreen = () => {
           tr_tag: data.tr_tag || existing?.tr_tag || '',
           th_tag: data.th_tag || existing?.th_tag || '',
           td_tag: data.td_tag || existing?.td_tag || '',
+          table_convert_bullets_to_ul: data.table_convert_bullets_to_ul === 'true',
           word_style: data.word_style || existing?.word_style || '', // ←wordStyle→word_style
           bold: data.bold === 'true',
           marker: data.extraStyle === 'marker',
@@ -910,6 +913,22 @@ const SettingsScreen = () => {
                       />
                       句点で閉じる
                     </label>
+                    {title === '表' && (
+                      <label className="inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          className="mr-1"
+                          checked={formData[activeTabId]?.[title]?.table_convert_bullets_to_ul === 'true'}
+                          onChange={(e) => handleChange(title, 'table_convert_bullets_to_ul', e.target.checked ? 'true' : '')}
+                        />
+                        中点をul/liタグに変換
+                      </label>
+                    )}
+                    {title === '表' && formData[activeTabId]?.[title]?.table_convert_bullets_to_ul === 'true' && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        チェックすると、セル内の「・」で始まるテキストを&lt;ul&gt;と&lt;li&gt;タグに変換します
+                      </div>
+                    )}
                   </div>
                 </div>
 

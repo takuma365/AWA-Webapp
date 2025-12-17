@@ -150,6 +150,16 @@ class ConversionRule(models.Model):
         blank=True,
         help_text=_('大見出し・中見出しのセクション終了時に挿入する閉じタグ（例: </div></section>）')
     )
+    use_bullet_points = models.BooleanField(
+        _('中点を除去してul/liタグを使う'),
+        default=False,
+        help_text=_('表のセル内で中点（・）を除去してul/liタグでリスト表示する')
+    )
+    table_convert_bullets_to_ul = models.BooleanField(
+        _('表で中点をul/liタグに変換'),
+        default=False,
+        help_text=_('表のセル内で中点（・）を除去してul/liタグでリスト表示する（表専用）')
+    )
     active = models.BooleanField(_('有効'), default=True)
     created_at = models.DateTimeField(_('作成日時'), auto_now_add=True)
     updated_at = models.DateTimeField(_('更新日時'), auto_now=True)

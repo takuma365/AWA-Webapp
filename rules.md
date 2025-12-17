@@ -1,6 +1,6 @@
 # AWA-Webapp 開発ルール
 
-## 🚀 デプロイ手順
+## デプロイ手順
 
 ### コード修正後のデプロイ
 
@@ -53,7 +53,7 @@ docker compose up -d
 curl -f http://localhost:8000/api/sites/ || echo "API check failed"
 ```
 
-## 📋 開発ルール
+## 開発ルール
 
 ### 1. コード修正時の注意事項
 
@@ -101,7 +101,7 @@ docker compose exec backend python app/manage.py loaddata backup.json
 docker compose exec backend python app/manage.py showmigrations
 ```
 
-## 🔧 環境設定
+## 環境設定
 
 ### 必要な環境変数
 
@@ -147,7 +147,7 @@ ALTER TABLE "api_site" ADD COLUMN "use_bullet_points" boolean DEFAULT true NOT N
 3. 設定を保存
 4. Wordファイルをアップロードして変換実行
 
-## 📞 緊急時対応
+## 緊急時対応
 
 ### サービスが起動しない場合
 
@@ -162,7 +162,7 @@ ALTER TABLE "api_site" ADD COLUMN "use_bullet_points" boolean DEFAULT true NOT N
 2. マイグレーションを再実行
 3. 必要に応じてデータベースをリセット
 
-## 📝 更新履歴
+## 更新履歴
 
 - 2025/01/XX: デプロイ手順を追加
 - 2025/01/XX: 開発ルールを追加

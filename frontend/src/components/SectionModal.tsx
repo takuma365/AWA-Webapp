@@ -17,8 +17,6 @@ const SectionModal: React.FC<SectionModalProps> = ({
   const [selectedSection, setSelectedSection] = useState<string>('');
 
   const sections = [
-    'タイトル',
-    '目次',
     '大見出し',
     '中見出し',
     '小見出し',

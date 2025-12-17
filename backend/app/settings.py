@@ -117,6 +117,10 @@ UPLOAD_TEMP_DIR = os.path.join(MEDIA_ROOT, 'uploads/temp')
 UPLOAD_IMAGE_DIR = os.path.join(MEDIA_ROOT, 'images')
 UPLOAD_HTML_DIR = os.path.join(MEDIA_ROOT, 'html')
 
+# File upload settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB in bytes
+DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB in bytes
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

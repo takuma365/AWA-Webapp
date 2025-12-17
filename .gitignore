@@ -1,8 +1,9 @@
 .env
 /node_modules
 /python_check/
-result.json
-downloaded.html
+*.html
+*.log
+*.json
 
 # XMLデータディレクトリを無視（アップロードされたWordファイルの解凍データ）
 backend/xml_data/

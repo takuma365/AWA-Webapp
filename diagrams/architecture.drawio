@@ -1,0 +1,81 @@
+<mxfile host="app.diagrams.net" modified="2025-12-17T00:00:00.000Z" agent="5.0" version="21.1.2">
+  <diagram id="architecture" name="システム構成図">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        
+        <!-- VPN Layer -->
+        <mxCell id="vpn" value="VPN (IP制限)&#xa;54.248.141.21のみ許可" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="200" y="40" width="760" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Nginx -->
+        <mxCell id="nginx" value="Nginx&#xa;(Reverse Proxy)&#xa;Port: 80&#xa;・IP制限 (geo module)&#xa;・アクセスログ記録&#xa;・最大100MBアップロード" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="200" y="140" width="760" height="100" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="arrow1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=classic;endFill=1" edge="1" parent="1" source="vpn" target="nginx">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Frontend -->
+        <mxCell id="frontend" value="Frontend&#xa;React 18 + Vite&#xa;Port: 5173 (内部)&#xa;&#xa;・TypeScript&#xa;・TailwindCSS&#xa;・React Router" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="200" y="280" width="240" height="140" as="geometry"/>
+        </mxCell>
+        
+        <!-- Backend -->
+        <mxCell id="backend" value="Backend&#xa;Django 4.2 + DRF&#xa;Port: 8000 (内部)&#xa;&#xa;・python-docx (Word解析)&#xa;・lxml (XML処理)&#xa;・REST API" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="480" y="280" width="240" height="140" as="geometry"/>
+        </mxCell>
+        
+        <!-- Database -->
+        <mxCell id="database" value="PostgreSQL 15&#xa;Port: 5432 (内部)&#xa;&#xa;・Site (サイト情報)&#xa;・ConversionSetting&#xa;・ConversionRule&#xa;・ConversionOutput" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="280" width="200" height="140" as="geometry"/>
+        </mxCell>
+        
+        <!-- Docker Volume -->
+        <mxCell id="volume" value="Docker Volume&#xa;(pgdata - 永続化)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="785" y="460" width="150" height="80" as="geometry"/>
+        </mxCell>
+        
+        <!-- Arrows -->
+        <mxCell id="arrow2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=classic;endFill=1" edge="1" parent="1" source="nginx" target="frontend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="arrow3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=classic;endFill=1" edge="1" parent="1" source="nginx" target="backend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="arrow4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=classic;endFill=1" edge="1" parent="1" source="backend" target="database">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="arrow5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=classic;endFill=1;dashed=1" edge="1" parent="1" source="database" target="volume">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Labels -->
+        <mxCell id="label1" value="HTTP" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="260" y="250" width="40" height="20" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="label2" value="API" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="540" y="250" width="40" height="20" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="label3" value="PostgreSQL&#xa;Connection" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="725" y="330" width="70" height="30" as="geometry"/>
+        </mxCell>
+        
+        <!-- Network Note -->
+        <mxCell id="note" value="外部公開: Nginxの80番ポートのみ&#xa;内部通信: Docker内部ネットワーク" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=10" vertex="1" parent="1">
+          <mxGeometry x="200" y="570" width="760" height="40" as="geometry"/>
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+

@@ -1,10 +1,22 @@
 services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    ports:
-      - "80:5173"
+    expose:
+      - "5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -12,7 +24,7 @@ services:
     command: npm run dev -- --host 0.0.0.0 --port 5173 --strictPort
     environment:
       - NODE_ENV=development
-      - VITE_API_URL=http://35.78.209.134:8000/api
+      - VITE_API_URL=http://18.182.22.110/api
     depends_on:
       - backend
 
@@ -20,8 +32,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       - ./backend:/app
       - ./backend/media:/app/media

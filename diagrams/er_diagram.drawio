@@ -1,0 +1,214 @@
+<mxfile host="app.diagrams.net" modified="2025-12-17T00:00:00.000Z" agent="5.0" version="21.1.2">
+  <diagram id="er_diagram" name="ER図">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        
+        <!-- Site Table -->
+        <mxCell id="site" value="Site (サイト)" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14" vertex="1" parent="1">
+          <mxGeometry x="100" y="80" width="320" height="280" as="geometry"/>
+        </mxCell>
+        <mxCell id="site_pk" value="🔑 id (PK) : INTEGER" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontStyle=1;fontSize=12" vertex="1" parent="site">
+          <mxGeometry y="26" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="site_line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="site">
+          <mxGeometry y="52" width="320" height="8" as="geometry"/>
+        </mxCell>
+        <mxCell id="site_name" value="サイト名 : name (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="site">
+          <mxGeometry y="60" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="site_url" value="URL識別子 : url (VARCHAR, UNIQUE)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="site">
+          <mxGeometry y="86" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="site_domain" value="クライアントドメイン : client_domain (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="site">
+          <mxGeometry y="112" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="site_omit" value="ドメイン省略フラグ : client_domain_omit (BOOLEAN)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="site">
+          <mxGeometry y="138" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="site_bullet" value="中点除去フラグ : use_bullet_points (BOOLEAN)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="site">
+          <mxGeometry y="164" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="site_active" value="有効フラグ : active (BOOLEAN)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="site">
+          <mxGeometry y="190" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="site_created" value="作成日時 : created_at (TIMESTAMP)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="site">
+          <mxGeometry y="216" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="site_updated" value="更新日時 : updated_at (TIMESTAMP)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="site">
+          <mxGeometry y="242" width="320" height="26" as="geometry"/>
+        </mxCell>
+        
+        <!-- ConversionSetting Table -->
+        <mxCell id="setting" value="ConversionSetting (変換設定)" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14" vertex="1" parent="1">
+          <mxGeometry x="560" y="80" width="360" height="280" as="geometry"/>
+        </mxCell>
+        <mxCell id="setting_pk" value="🔑 id (PK) : INTEGER" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontStyle=1;fontSize=12" vertex="1" parent="setting">
+          <mxGeometry y="26" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="setting_fk" value="🔗 site_id (FK) → Site.id" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontStyle=1;fontSize=12" vertex="1" parent="setting">
+          <mxGeometry y="52" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="setting_line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="setting">
+          <mxGeometry y="78" width="360" height="8" as="geometry"/>
+        </mxCell>
+        <mxCell id="setting_name" value="設定名 : name (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="setting">
+          <mxGeometry y="86" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="setting_prefix" value="CSSプレフィックス : css_class_prefix (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="setting">
+          <mxGeometry y="112" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="setting_empty" value="空段落削除 : remove_empty_paragraphs (BOOLEAN)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="setting">
+          <mxGeometry y="138" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="setting_image" value="画像保持 : preserve_images (BOOLEAN)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="setting">
+          <mxGeometry y="164" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="setting_dir" value="画像ディレクトリ : image_dir (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="setting">
+          <mxGeometry y="190" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="setting_active" value="有効フラグ : active (BOOLEAN)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="setting">
+          <mxGeometry y="216" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="setting_created" value="作成日時 : created_at (TIMESTAMP)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="setting">
+          <mxGeometry y="242" width="360" height="26" as="geometry"/>
+        </mxCell>
+        
+        <!-- ConversionRule Table -->
+        <mxCell id="rule" value="ConversionRule (変換ルール)" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14" vertex="1" parent="1">
+          <mxGeometry x="1020" y="80" width="340" height="416" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_pk" value="🔑 id (PK) : INTEGER" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontStyle=1;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="26" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_fk" value="🔗 setting_id (FK) → ConversionSetting.id" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontStyle=1;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="52" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="rule">
+          <mxGeometry y="78" width="340" height="8" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_section" value="セクション : section (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="86" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_style" value="Wordスタイル : word_style (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="112" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_tag" value="HTMLタグ : tag (TEXT)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="138" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_bold" value="太字フラグ : bold (BOOLEAN)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="164" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_marker" value="マーカーフラグ : marker (BOOLEAN)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="190" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_prefix" value="前置文字列 : prefix_text (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="216" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_suffix" value="後置文字列 : suffix_text (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="242" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_split" value="句点分割 : split_on_period (BOOLEAN)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="268" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_closing" value="閉じタグ : closing_tags (TEXT)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="294" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_table" value="テーブルタグ : table_tag, tr_tag... (TEXT)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="320" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_active" value="有効フラグ : active (BOOLEAN)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="rule">
+          <mxGeometry y="346" width="340" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="rule_unique" value="UNIQUE: (setting_id, section)" style="text;strokeColor=none;fillColor=#ffe6cc;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;fontStyle=2;strokeColor=#d79b00" vertex="1" parent="rule">
+          <mxGeometry y="372" width="340" height="22" as="geometry"/>
+        </mxCell>
+        
+        <!-- ConversionOutput Table -->
+        <mxCell id="output" value="ConversionOutput (変換出力結果)" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14" vertex="1" parent="1">
+          <mxGeometry x="560" y="430" width="360" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="output_pk" value="🔑 id (PK) : INTEGER" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontStyle=1;fontSize=12" vertex="1" parent="output">
+          <mxGeometry y="26" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="output_fk" value="🔗 setting_id (FK) → ConversionSetting.id" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontStyle=1;fontSize=12" vertex="1" parent="output">
+          <mxGeometry y="52" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="output_line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="output">
+          <mxGeometry y="78" width="360" height="8" as="geometry"/>
+        </mxCell>
+        <mxCell id="output_filename" value="元ファイル名 : original_filename (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="output">
+          <mxGeometry y="86" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="output_html" value="HTML本体 : html_content (TEXT)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="output">
+          <mxGeometry y="112" width="360" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="output_path" value="HTMLファイルパス : html_path (VARCHAR)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="output">
+          <mxGeometry y="138" width="360" height="26" as="geometry"/>
+        </mxCell>
+        
+        <!-- Relationships -->
+        <mxCell id="rel1" value="" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0" edge="1" parent="1" source="site_url" target="setting_fk">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="430" y="200" as="sourcePoint"/>
+            <mxPoint x="560" y="158" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel1_label" value="1:N" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;fontStyle=1" vertex="1" connectable="0" parent="rel1">
+          <mxGeometry x="-0.2" y="2" relative="1" as="geometry">
+            <mxPoint x="10" y="-8" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="rel2" value="" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0" edge="1" parent="1" source="setting_prefix" target="rule_fk">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="920" y="205" as="sourcePoint"/>
+            <mxPoint x="1020" y="158" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel2_label" value="1:N" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;fontStyle=1" vertex="1" connectable="0" parent="rel2">
+          <mxGeometry x="-0.2" y="2" relative="1" as="geometry">
+            <mxPoint x="10" y="-8" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="rel3" value="" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERmany;startArrow=ERone;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0" edge="1" parent="1" source="setting" target="output">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="740" y="360" as="sourcePoint"/>
+            <mxPoint x="740" y="430" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel3_label" value="1:N" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;fontStyle=1" vertex="1" connectable="0" parent="rel3">
+          <mxGeometry x="-0.2" y="2" relative="1" as="geometry">
+            <mxPoint x="20" y="5" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Legend -->
+        <mxCell id="legend" value="凡例" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f5f5f5;strokeColor=#666666;fontSize=14" vertex="1" parent="1">
+          <mxGeometry x="100" y="430" width="320" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend1" value="🔑 PK (Primary Key) : 主キー" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="legend">
+          <mxGeometry y="26" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend2" value="🔗 FK (Foreign Key) : 外部キー" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="legend">
+          <mxGeometry y="52" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend3" value="1:N : 1対多のリレーション" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="legend">
+          <mxGeometry y="78" width="320" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend4" value="UNIQUE : ユニーク制約" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12" vertex="1" parent="legend">
+          <mxGeometry y="104" width="320" height="26" as="geometry"/>
+        </mxCell>
+        
+        <!-- Title -->
+        <mxCell id="title" value="AWA-Webapp データベース設計 (ER図)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="480" y="20" width="400" height="30" as="geometry"/>
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+
