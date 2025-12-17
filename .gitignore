@@ -4,6 +4,7 @@
 *.html
 *.log
 *.json
+test_*
 
 # XMLデータディレクトリを無視（アップロードされたWordファイルの解凍データ）
 backend/xml_data/

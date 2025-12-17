@@ -20,25 +20,40 @@ if [ ! -d "diagrams" ]; then
 fi
 
 # Draw.ioファイルの確認
-if [ ! -f "diagrams/architecture.drawio" ]; then
-    echo " エラー: diagrams/architecture.drawio が見つかりません"
-    exit 1
-fi
+DRAWIO_FILES=(
+    "architecture.drawio"
+    "er_diagram.drawio"
+    "xml_to_html_converter_flow.drawio"
+    "word_to_html_accurate_flow.drawio"
+)
 
-if [ ! -f "diagrams/er_diagram.drawio" ]; then
-    echo " エラー: diagrams/er_diagram.drawio が見つかりません"
-    exit 1
-fi
+for file in "${DRAWIO_FILES[@]}"; do
+    if [ ! -f "diagrams/$file" ]; then
+        echo " 警告: diagrams/$file が見つかりません（スキップします）"
+    fi
+done
 
 echo " Draw.ioファイルを確認しました"
 echo ""
 
+# 生成するファイル数をカウント
+TOTAL_FILES=0
+for file in "${DRAWIO_FILES[@]}"; do
+    if [ -f "diagrams/$file" ]; then
+        TOTAL_FILES=$((TOTAL_FILES + 1))
+    fi
+done
+
 # Dockerを使用してPNG生成
-echo " PNG画像を生成中..."
+echo " PNG画像を生成中... (全${TOTAL_FILES}ファイル)"
 echo ""
 
+CURRENT=0
+
 # architecture.png 生成
-echo "1/2: architecture.png を生成中..."
+if [ -f "diagrams/architecture.drawio" ]; then
+    CURRENT=$((CURRENT + 1))
+    echo "$CURRENT/$TOTAL_FILES: architecture.png を生成中..."
 docker run --rm \
     -v "$(pwd)/diagrams:/data" \
     rlespinasse/drawio-export:latest \
@@ -49,41 +64,90 @@ docker run --rm \
     --output /data \
     /data/architecture.drawio
 
-if [ -f "diagrams/architecture.png" ]; then
-    echo "    architecture.png を生成しました"
-    ls -lh diagrams/architecture.png | awk '{print "   ファイルサイズ:", $5}'
-else
-    echo "    architecture.png の生成に失敗しました"
+    if [ -f "diagrams/architecture.png" ]; then
+        echo "    architecture.png を生成しました"
+        ls -lh diagrams/architecture.png | awk '{print "   ファイルサイズ:", $5}'
+    else
+        echo "    architecture.png の生成に失敗しました"
+    fi
+    echo ""
 fi
-echo ""
 
 # er_diagram.png 生成
-echo "2/2: er_diagram.png を生成中..."
-docker run --rm \
-    -v "$(pwd)/diagrams:/data" \
-    rlespinasse/drawio-export:latest \
-    --format png \
-    --quality 100 \
-    --transparent \
-    --border 10 \
-    --output /data \
-    /data/er_diagram.drawio
-
-if [ -f "diagrams/er_diagram.png" ]; then
-    echo "    er_diagram.png を生成しました"
-    ls -lh diagrams/er_diagram.png | awk '{print "   ファイルサイズ:", $5}'
-else
-    echo "    er_diagram.png の生成に失敗しました"
+if [ -f "diagrams/er_diagram.drawio" ]; then
+    CURRENT=$((CURRENT + 1))
+    echo "$CURRENT/$TOTAL_FILES: er_diagram.png を生成中..."
+    docker run --rm \
+        -v "$(pwd)/diagrams:/data" \
+        rlespinasse/drawio-export:latest \
+        --format png \
+        --quality 100 \
+        --transparent \
+        --border 10 \
+        --output /data \
+        /data/er_diagram.drawio
+    
+    if [ -f "diagrams/er_diagram.png" ]; then
+        echo "    er_diagram.png を生成しました"
+        ls -lh diagrams/er_diagram.png | awk '{print "   ファイルサイズ:", $5}'
+    else
+        echo "    er_diagram.png の生成に失敗しました"
+    fi
+    echo ""
 fi
-echo ""
+
+# xml_to_html_converter_flow.png 生成
+if [ -f "diagrams/xml_to_html_converter_flow.drawio" ]; then
+    CURRENT=$((CURRENT + 1))
+    echo "$CURRENT/$TOTAL_FILES: xml_to_html_converter_flow.png を生成中..."
+    docker run --rm \
+        -v "$(pwd)/diagrams:/data" \
+        rlespinasse/drawio-export:latest \
+        --format png \
+        --quality 100 \
+        --transparent \
+        --border 10 \
+        --output /data \
+        /data/xml_to_html_converter_flow.drawio
+    
+    if [ -f "diagrams/xml_to_html_converter_flow.png" ]; then
+        echo "    xml_to_html_converter_flow.png を生成しました"
+        ls -lh diagrams/xml_to_html_converter_flow.png | awk '{print "   ファイルサイズ:", $5}'
+    else
+        echo "    xml_to_html_converter_flow.png の生成に失敗しました"
+    fi
+    echo ""
+fi
+
+# word_to_html_accurate_flow.png 生成
+if [ -f "diagrams/word_to_html_accurate_flow.drawio" ]; then
+    CURRENT=$((CURRENT + 1))
+    echo "$CURRENT/$TOTAL_FILES: word_to_html_accurate_flow.png を生成中..."
+    docker run --rm \
+        -v "$(pwd)/diagrams:/data" \
+        rlespinasse/drawio-export:latest \
+        --format png \
+        --quality 100 \
+        --transparent \
+        --border 10 \
+        --output /data \
+        /data/word_to_html_accurate_flow.drawio
+    
+    if [ -f "diagrams/word_to_html_accurate_flow.png" ]; then
+        echo "    word_to_html_accurate_flow.png を生成しました"
+        ls -lh diagrams/word_to_html_accurate_flow.png | awk '{print "   ファイルサイズ:", $5}'
+    else
+        echo "    word_to_html_accurate_flow.png の生成に失敗しました"
+    fi
+    echo ""
+fi
 
 echo "=========================================="
 echo " 完了！"
 echo "=========================================="
 echo ""
 echo "生成されたファイル:"
-echo "  - diagrams/architecture.png"
-echo "  - diagrams/er_diagram.png"
+ls -1 diagrams/*.png 2>/dev/null | sed 's/^/  - /' || echo "  (PNG画像が見つかりませんでした)"
 echo ""
 echo "確認方法:"
 echo "  ls -lh diagrams/*.png"
